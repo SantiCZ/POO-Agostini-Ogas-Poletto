@@ -135,6 +135,5 @@ El proyecto utiliza un enfoque híbrido moderno:
 
 ---
 
- activa con IA  
 
 ---
