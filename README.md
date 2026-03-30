@@ -2,7 +2,7 @@
 proyecto grupal correspondiente a la materia POO
 # 💸 SmartExpense & Subs Manager
 
-**Dominio:** fin-ansias.com.ar  
+**Dominio:** AlcancIA.com.ar  
 
 ---
 
