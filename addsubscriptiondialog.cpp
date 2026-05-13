@@ -4,7 +4,7 @@
 #include <QHBoxLayout>
 #include <QGridLayout>
 #include <QLabel>
-
+//
 AddSubscriptionDialog::AddSubscriptionDialog(QWidget *parent) : QDialog(parent) {
     setWindowTitle("Nueva Suscripción");
     setModal(true);
