@@ -1,8 +1,8 @@
-#include "mainwindow.h"
+#include "mainwidget.h"
 #include "stylemanager.h"
-#include <QWidget>
+#include <QVBoxLayout>
 
-MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
+MainWidget::MainWidget(QWidget *parent) : QWidget(parent) {
     setWindowTitle("AlcancIA — Asistente Financiero");
     setMinimumSize(1100, 680);
     resize(1280, 780);
@@ -10,22 +10,20 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setupUI();
 }
 
-void MainWindow::applyStyles() {
+void MainWidget::applyStyles() {
     setStyleSheet(StyleManager::appStyleSheet() + R"(
-        QMainWindow { background-color: #0F1117; }
+        QWidget {
+            background-color: #0F1117;
+        }
     )");
 }
 
-void MainWindow::setupUI() {
-    QWidget *central = new QWidget(this);
-    central->setStyleSheet("background-color: #0F1117;");
-    setCentralWidget(central);
-
-    QHBoxLayout *rootLayout = new QHBoxLayout(central);
+void MainWidget::setupUI() {
+    QHBoxLayout *rootLayout = new QHBoxLayout(this);
     rootLayout->setContentsMargins(0, 0, 0, 0);
     rootLayout->setSpacing(0);
 
-    m_sidebar = new Sidebar(central);
+    m_sidebar = new Sidebar(this);
 
     QWidget *contentArea = new QWidget();
     contentArea->setStyleSheet("background-color: #0F1117;");
