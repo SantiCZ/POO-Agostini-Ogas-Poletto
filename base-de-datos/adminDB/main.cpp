@@ -27,41 +27,88 @@ int main(int argc, char *argv[])
     //---------------------------------------------------------
 
     // Creamos una consulta usando la conexión
-    QSqlQuery query(dbProyecto.getDB());
+    QSqlQuery queryTablas(dbProyecto.getDB());
 
 
     // Preparamos la consulta SQL
-    query.prepare(
+    /*query.prepare(
         "SELECT id_usuario, nombre, email "
         "FROM usuarios"
-        );
+        );*/
 
+    qDebug() << "\n=== TABLAS EN LA BASE ===";
 
     // Ejecutamos la consulta
-    if (query.exec())
+    if(queryTablas.exec(
+            "SELECT name "
+            "FROM sqlite_master "
+            "WHERE type='table';"
+            ))
     {
-        // Mientras existan filas
-        while (query.next())
+        qDebug() << "";
+        qDebug() << "===== TABLAS Y CAMPOS =====";
+
+
+        // Recorremos cada tabla encontrada
+        while(queryTablas.next())
         {
-            // Leemos los datos de la fila actual
+            // Guardamos el nombre de la tabla
+            QString nombreTabla =
+                queryTablas.value(0).toString();
 
-            qDebug() << "ID:"
-                     << query.value("id_usuario").toInt();
+            qDebug() << "";
+            qDebug() << "Tabla:" << nombreTabla;
 
-            qDebug() << "Nombre:"
-                     << query.value("nombre").toString();
 
-            qDebug() << "Email:"
-                     << query.value("email").toString();
+            // ============================
+            // CONSULTAR CAMPOS
+            // ============================
+
+            QSqlQuery queryCampos(dbProyecto.getDB());
+
+
+            // PRAGMA table_info(tabla)
+            // devuelve información de columnas
+
+            QString consultaCampos =
+                "PRAGMA table_info(" +
+                nombreTabla + ");";
+
+
+            if(queryCampos.exec(consultaCampos))
+            {
+                while(queryCampos.next())
+                {
+                    // Columna 1 = nombre del campo
+                    QString nombreCampo =
+                        queryCampos.value(1).toString();
+
+                    // Columna 2 = tipo del campo
+                    QString tipoCampo =
+                        queryCampos.value(2).toString();
+
+                    qDebug()
+                        << "   Campo:"
+                        << nombreCampo
+                        << "| Tipo:"
+                        << tipoCampo;
+                }
+            }
+            else
+            {
+                qDebug()
+                << "Error leyendo campos:"
+                << queryCampos.lastError().text();
+            }
         }
     }
     else
     {
-        // Si falla la consulta
-        qDebug() << "Error en SELECT:"
-                 << query.lastError().text();
+        qDebug()
+        << "Error leyendo tablas:"
+        << queryTablas.lastError().text();
     }
-
 
     return 0;
 }
+
