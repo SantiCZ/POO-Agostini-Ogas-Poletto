@@ -1,7 +1,7 @@
 #include <QApplication>
 #include <QFont>
 #include <QMessageBox>
-#include "mainwindow.h"
+#include "mainwidget.h"
 #include "logindialog.h"
 #include "datamanager.h"
 
@@ -16,27 +16,22 @@ int main(int argc, char *argv[]) {
     app.setApplicationVersion("1.0.0");
     app.setOrganizationName("AlcancIA Team");
 
-    // Cargar datos existentes (usuarios, tickets, suscripciones)
+    // Cargar datos existentes
     DataManager::instance().loadFromFile();
+    // Crear usuario demo si no hay ninguno
+    DataManager::instance().migrateUsers();
 
-    // ── Login / Registro ───────────────────────────────────────────
     LoginDialog login;
     if (login.exec() != QDialog::Accepted) {
         return 0;
     }
 
-    // Si el usuario se acaba de registrar, persistir el nuevo usuario
+    // Si el usuario se acaba de registrar, mostrar mensaje de bienvenida
     if (login.wasRegistered()) {
-        UserData newUser = login.getRegisteredUser();
-
-        // TODO: reemplazar por DataManager::instance().createUser(newUser)
-        // cuando esté implementado el modelo de usuarios en DataManager
-        DataManager::instance().saveToFile();
-
         QMessageBox msg;
         msg.setWindowTitle("Bienvenido a AlcancIA");
-        msg.setText(QString("Cuenta creada exitosamente.\n\nHola, %1! Ya podes empezar.")
-                        .arg(newUser.username));
+        msg.setText(QString("Cuenta creada exitosamente.\n\nHola, %1! Ya podés empezar.")
+                        .arg(login.getUsername()));
         msg.setStyleSheet(R"(
             QMessageBox { background-color: #1A1D27; }
             QMessageBox QLabel { color: #F1F5F9; font-size: 13px; }
@@ -50,8 +45,7 @@ int main(int argc, char *argv[]) {
         msg.exec();
     }
 
-    // ── Ventana principal ──────────────────────────────────────────
-    MainWindow window;
+    MainWidget window;
     window.setWindowTitle(QString("AlcancIA - %1").arg(login.getUsername()));
     window.show();
 
