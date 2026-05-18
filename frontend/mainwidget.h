@@ -1,5 +1,5 @@
 #pragma once
-#include <QMainWindow>
+#include <QWidget>
 #include <QStackedWidget>
 #include <QHBoxLayout>
 #include "sidebar.h"
@@ -8,11 +8,11 @@
 #include "subscriptionspage.h"
 #include "reportspage.h"
 
-class MainWindow : public QMainWindow {
+class MainWidget : public QWidget {
     Q_OBJECT
 public:
-    explicit MainWindow(QWidget *parent = nullptr);
-    ~MainWindow() = default;
+    explicit MainWidget(QWidget *parent = nullptr);
+    ~MainWidget() = default;
 
 private:
     void setupUI();
