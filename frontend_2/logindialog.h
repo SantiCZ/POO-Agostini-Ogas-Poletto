@@ -17,6 +17,7 @@ private slots:
     void onRegister();
     void showLoginPanel();
     void showRegisterPanel();
+    void onRegistroRespuesta(bool exito, const QString &mensaje); // <--- NUEVO: Slot para la respuesta de red
 
 private:
     void buildLoginPanel();

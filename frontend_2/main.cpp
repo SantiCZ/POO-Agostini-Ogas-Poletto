@@ -30,8 +30,7 @@ int main(int argc, char *argv[]) {
     if (login.wasRegistered()) {
         QMessageBox msg;
         msg.setWindowTitle("Bienvenido a AlcancIA");
-        msg.setText(QString("Cuenta creada exitosamente.\n\nHola, %1! Ya podés empezar.")
-                        .arg(login.getUsername()));
+        msg.setText(QString("Cuenta creada exitosamente.\n\nHola, %1! Ya podés empezar.").arg(login.getUsername()));
         msg.setStyleSheet(R"(
             QMessageBox { background-color: #1A1D27; }
             QMessageBox QLabel { color: #F1F5F9; font-size: 13px; }

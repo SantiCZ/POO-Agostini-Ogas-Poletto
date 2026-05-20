@@ -1,11 +1,13 @@
 #include "uploadticketdialog.h"
 #include "stylemanager.h"
 #include "models.h"
+#include "datamanager.h"
 #include <QFileDialog>
 #include <QHBoxLayout>
 #include <QGridLayout>
 #include <QPixmap>
-#include <QTimer>
+#include <QJsonArray>
+#include <QFileInfo>
 
 UploadTicketDialog::UploadTicketDialog(QWidget *parent) : QDialog(parent) {
     setWindowTitle("Subir Ticket");
@@ -19,6 +21,42 @@ UploadTicketDialog::UploadTicketDialog(QWidget *parent) : QDialog(parent) {
         }
     )");
     setupUI();
+
+    // Conectores del canal de respuestas asíncronas de la IA
+    connect(&DataManager::instance(), &DataManager::estadoRedCambiado, this, [this](DataManager::EstadoRed estado) {
+        if (estado == DataManager::ENVIANDO_FOTO) {
+            m_analyzeBtn->setText("Analizando...");
+            m_analyzeBtn->setEnabled(false);
+            m_statusLabel->setText("⏳ La IA está procesando el ticket...");
+            m_statusLabel->setStyleSheet("color: #818CF8; font-size: 12px; background: transparent;");
+            m_statusLabel->show();
+        } else if (estado == DataManager::EXITO || estado == DataManager::ERROR_CONEXION) {
+            m_analyzeBtn->setText("✨  Analizar con IA");
+            m_analyzeBtn->setEnabled(true);
+        }
+    });
+
+    connect(&DataManager::instance(), &DataManager::ticketProcesadoRed, this, [this](const QString &comercio, double monto, const QString &fecha, const QString &categoria, const QJsonObject &jsonCompleto) {
+        m_iaJsonResult = jsonCompleto; // Almacenamos el JSON completo de OpenAI
+
+        m_localEdit->setText(comercio);
+        m_montoSpin->setValue(monto);
+
+        QDate parsedDate = QDate::fromString(fecha, Qt::ISODate);
+        if(parsedDate.isValid()) m_fechaEdit->setDate(parsedDate);
+
+        int idx = m_catCombo->findText(categoria, Qt::MatchContains);
+        if(idx != -1) m_catCombo->setCurrentIndex(idx);
+
+        m_statusLabel->setText("✅ ¡Datos completados por la IA!");
+        m_statusLabel->setStyleSheet("color: #4ADE80; font-size: 12px; background: transparent;");
+    });
+
+    connect(&DataManager::instance(), &DataManager::errorDeRed, this, [this](const QString &mensaje) {
+        m_statusLabel->setText("❌ Error: " + mensaje);
+        m_statusLabel->setStyleSheet("color: #F87171; font-size: 12px; background: transparent;");
+        m_statusLabel->show();
+    });
 }
 
 void UploadTicketDialog::setupUI() {
@@ -26,7 +64,6 @@ void UploadTicketDialog::setupUI() {
     mainL->setContentsMargins(28, 24, 28, 24);
     mainL->setSpacing(20);
 
-    // ── Encabezado ────────────────────────────────────────────────
     QWidget *headerW = new QWidget();
     headerW->setStyleSheet("background: transparent;");
     QHBoxLayout *headerL = new QHBoxLayout(headerW);
@@ -46,33 +83,17 @@ void UploadTicketDialog::setupUI() {
     titleL->addWidget(sub);
 
     QLabel *badge = new QLabel("✨ IA");
-    badge->setStyleSheet(R"(
-        color: #818CF8; background-color: rgba(129,140,248,0.12);
-        border: 1px solid rgba(129,140,248,0.3);
-        border-radius: 12px; padding: 4px 10px;
-        font-size: 11px; font-weight: 700;
-    )");
+    badge->setStyleSheet("color: #818CF8; background-color: rgba(129,140,248,0.12); border: 1px solid rgba(129,140,248,0.3); border-radius: 12px; padding: 4px 10px; font-size: 11px; font-weight: 700;");
 
     headerL->addWidget(titleW);
     headerL->addStretch();
     headerL->addWidget(badge);
     mainL->addWidget(headerW);
 
-    // ── Zona de drop ──────────────────────────────────────────────
     m_dropZone = new QFrame();
     m_dropZone->setFixedHeight(170);
     m_dropZone->setCursor(Qt::PointingHandCursor);
-    m_dropZone->setStyleSheet(R"(
-        QFrame {
-            background-color: rgba(74,222,128,0.03);
-            border: 2px dashed #2E3347;
-            border-radius: 14px;
-        }
-        QFrame:hover {
-            border: 2px dashed #4ADE80;
-            background-color: rgba(74,222,128,0.06);
-        }
-    )");
+    m_dropZone->setStyleSheet("QFrame { background-color: rgba(74,222,128,0.03); border: 2px dashed #2E3347; border-radius: 14px; } QFrame:hover { border: 2px dashed #4ADE80; background-color: rgba(74,222,128,0.06); }");
 
     QVBoxLayout *dropL = new QVBoxLayout(m_dropZone);
     dropL->setAlignment(Qt::AlignCenter);
@@ -93,20 +114,7 @@ void UploadTicketDialog::setupUI() {
     m_selectBtn = new QPushButton("Seleccionar archivo");
     m_selectBtn->setFixedSize(160, 34);
     m_selectBtn->setCursor(Qt::PointingHandCursor);
-    m_selectBtn->setStyleSheet(R"(
-        QPushButton {
-            background-color: #21253A;
-            color: #94A3B8;
-            border: 1px solid #2E3347;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-        QPushButton:hover {
-            border: 1px solid #4ADE80;
-            color: #4ADE80;
-        }
-    )");
+    m_selectBtn->setStyleSheet("QPushButton { background-color: #21253A; color: #94A3B8; border: 1px solid #2E3347; border-radius: 8px; font-size: 12px; font-weight: 600; } QPushButton:hover { border: 1px solid #4ADE80; color: #4ADE80; }");
     connect(m_selectBtn, &QPushButton::clicked, this, &UploadTicketDialog::onSelectImage);
 
     dropL->addWidget(m_dropIcon);
@@ -117,50 +125,27 @@ void UploadTicketDialog::setupUI() {
 
     mainL->addWidget(m_dropZone);
 
-    // ── Botón analizar ────────────────────────────────────────────
     m_analyzeBtn = new QPushButton("✨  Analizar con IA");
     m_analyzeBtn->setFixedHeight(42);
     m_analyzeBtn->setEnabled(false);
     m_analyzeBtn->setCursor(Qt::PointingHandCursor);
-    m_analyzeBtn->setStyleSheet(R"(
-        QPushButton {
-            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                stop:0 #818CF8, stop:1 #6366F1);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 13px;
-            font-weight: 700;
-        }
-        QPushButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                stop:0 #6366F1, stop:1 #4F46E5);
-        }
-        QPushButton:disabled {
-            background-color: #21253A;
-            color: #475569;
-        }
-    )");
+    m_analyzeBtn->setStyleSheet("QPushButton { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #818CF8, stop:1 #6366F1); color: white; border: none; border-radius: 10px; font-size: 13px; font-weight: 700; } QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #6366F1, stop:1 #4F46E5); } QPushButton:disabled { background-color: #21253A; color: #475569; }");
     connect(m_analyzeBtn, &QPushButton::clicked, this, &UploadTicketDialog::onAnalyzeIA);
     mainL->addWidget(m_analyzeBtn);
 
-    // ── Status ────────────────────────────────────────────────────
     m_statusLabel = new QLabel("");
     m_statusLabel->setStyleSheet("color: #4ADE80; font-size: 12px; background: transparent;");
     m_statusLabel->setAlignment(Qt::AlignCenter);
     m_statusLabel->hide();
     mainL->addWidget(m_statusLabel);
 
-    // ── Separador ─────────────────────────────────────────────────
     QFrame *sep = new QFrame();
     sep->setFrameShape(QFrame::HLine);
     sep->setStyleSheet("background-color: #2E3347; border: none;");
     mainL->addWidget(sep);
 
-    // ── Formulario manual ─────────────────────────────────────────
     QLabel *formTitle = new QLabel("Datos del ticket");
-    formTitle->setStyleSheet("color: #94A3B8; font-size: 12px; font-weight: 600; "
-                              "letter-spacing: 0.5px; background: transparent;");
+    formTitle->setStyleSheet("color: #94A3B8; font-size: 12px; font-weight: 600; letter-spacing: 0.5px; background: transparent;");
     mainL->addWidget(formTitle);
 
     QWidget *formW = new QWidget();
@@ -171,27 +156,11 @@ void UploadTicketDialog::setupUI() {
 
     QString inputStyle = R"(
         QLineEdit, QComboBox, QDoubleSpinBox, QDateEdit {
-            background-color: #21253A;
-            color: #F1F5F9;
-            border: 1px solid #2E3347;
-            border-radius: 8px;
-            padding: 8px 12px;
-            font-size: 13px;
+            background-color: #21253A; color: #F1F5F9;
+            border: 1px solid #2E3347; border-radius: 8px;
+            padding: 8px 12px; font-size: 13px;
         }
-        QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus, QDateEdit:focus {
-            border: 1px solid #4ADE80;
-        }
-        QComboBox QAbstractItemView {
-            background-color: #21253A;
-            color: #F1F5F9;
-            border: 1px solid #2E3347;
-            selection-background-color: #2E3347;
-        }
-        QComboBox::drop-down { border: none; width: 24px; }
-        QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {
-            background: #2E3347; border: none; border-radius: 3px;
-        }
-        QDateEdit::drop-down { border: none; width: 24px; }
+        QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus, QDateEdit:focus { border: 1px solid #4ADE80; }
     )";
 
     auto makeLabel = [](const QString &txt) {
@@ -229,7 +198,6 @@ void UploadTicketDialog::setupUI() {
 
     mainL->addWidget(formW);
 
-    // ── Botones finales ───────────────────────────────────────────
     mainL->addStretch();
     QWidget *btnW = new QWidget();
     btnW->setStyleSheet("background: transparent;");
@@ -239,32 +207,13 @@ void UploadTicketDialog::setupUI() {
 
     m_cancelBtn = new QPushButton("Cancelar");
     m_cancelBtn->setFixedHeight(40);
-    m_cancelBtn->setCursor(Qt::PointingHandCursor);
-    m_cancelBtn->setStyleSheet(R"(
-        QPushButton {
-            background: transparent; color: #64748B;
-            border: 1px solid #2E3347; border-radius: 8px;
-            font-size: 13px;
-        }
-        QPushButton:hover { color: #94A3B8; border-color: #475569; }
-    )");
+    m_cancelBtn->setStyleSheet("QPushButton { background: transparent; color: #64748B; border: 1px solid #2E3347; border-radius: 8px; font-size: 13px; } QPushButton:hover { color: #94A3B8; border-color: #475569; }");
     connect(m_cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
 
     m_saveBtn = new QPushButton("💾  Guardar Ticket");
     m_saveBtn->setFixedHeight(40);
-    m_saveBtn->setCursor(Qt::PointingHandCursor);
-    m_saveBtn->setStyleSheet(R"(
-        QPushButton {
-            background-color: #4ADE80;
-            color: #0F1117;
-            border: none;
-            border-radius: 8px;
-            font-size: 13px;
-            font-weight: 700;
-        }
-        QPushButton:hover { background-color: #22C55E; }
-    )");
-    connect(m_saveBtn, &QPushButton::clicked, this, &QDialog::accept);
+    m_saveBtn->setStyleSheet("QPushButton { background-color: #4ADE80; color: #0F1117; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; } QPushButton:hover { background-color: #22C55E; }");
+    connect(m_saveBtn, &QPushButton::clicked, this, &UploadTicketDialog::accept);
 
     btnL->addWidget(m_cancelBtn, 1);
     btnL->addWidget(m_saveBtn, 2);
@@ -272,11 +221,7 @@ void UploadTicketDialog::setupUI() {
 }
 
 void UploadTicketDialog::onSelectImage() {
-    QString path = QFileDialog::getOpenFileName(
-        this, "Seleccionar imagen o PDF",
-        QDir::homePath(),
-        "Imágenes y PDFs (*.jpg *.jpeg *.png *.pdf)"
-    );
+    QString path = QFileDialog::getOpenFileName(this, "Seleccionar imagen o PDF", QDir::homePath(), "Imágenes y PDFs (*.jpg *.jpeg *.png *.pdf)");
     if (!path.isEmpty()) {
         m_imagenPath = path;
         updateDropZone(path);
@@ -290,34 +235,64 @@ void UploadTicketDialog::updateDropZone(const QString &path) {
     m_dropLabel->setText(fi.fileName());
     m_dropLabel->setStyleSheet("color: #4ADE80; font-size: 13px; font-weight: 600; background: transparent;");
     m_dropSub->setText(QString("%1 KB").arg(fi.size() / 1024));
-    m_dropZone->setStyleSheet(R"(
-        QFrame {
-            background-color: rgba(74,222,128,0.06);
-            border: 2px dashed #4ADE80;
-            border-radius: 14px;
-        }
-    )");
+    m_dropZone->setStyleSheet("QFrame { background-color: rgba(74,222,128,0.06); border: 2px dashed #4ADE80; border-radius: 14px; }");
     m_selectBtn->setText("Cambiar archivo");
 }
 
 void UploadTicketDialog::onAnalyzeIA() {
-    // Simulación de análisis IA (sin implementar aún)
-    m_analyzeBtn->setText("Analizando...");
-    m_analyzeBtn->setEnabled(false);
-    m_statusLabel->setText("⏳ La IA está procesando el ticket...");
-    m_statusLabel->show();
+    if (!m_imagenPath.isEmpty()) {
+        DataManager::instance().analizarTicketRed(m_imagenPath);
+    }
+}
 
-    QTimer::singleShot(1500, this, [this]() {
-        // Datos de ejemplo — en producción vendrán de la API
-        m_localEdit->setText("Disco Supermarket");
-        m_montoSpin->setValue(4850.00);
-        m_fechaEdit->setDate(QDate::currentDate());
-        m_catCombo->setCurrentText("Supermercado");
+void UploadTicketDialog::accept() {
+    QJsonObject payload;
 
-        m_statusLabel->setText("✅ ¡Datos completados por la IA!");
-        m_analyzeBtn->setText("✨  Analizar con IA");
-        m_analyzeBtn->setEnabled(true);
-    });
+    // Si m_iaJsonResult está vacío, construimos el esquema base de forma manual
+    if (m_iaJsonResult.isEmpty()) {
+        QJsonObject comprobante;
+        comprobante["ruta_archivo"] = m_imagenPath.isEmpty() ? "tickets/manual.jpg" : m_imagenPath;
+        comprobante["estado"] = "procesado";
+
+        QJsonObject gasto;
+        gasto["comercio"] = m_localEdit->text();
+        gasto["monto"] = m_montoSpin->value();
+        gasto["fecha_gasto"] = m_fechaEdit->date().toString(Qt::ISODate);
+        gasto["categoria_sugerida"] = m_catCombo->currentText();
+        gasto["notas"] = "Carga manual desde la app de escritorio";
+
+        payload["comprobante"] = comprobante;
+        payload["gasto"] = gasto;
+        payload["items_gasto"] = QJsonArray();
+        payload["suscripcion"] = QJsonValue::Null;
+        payload["notificacion"] = QJsonValue::Null;
+    } else {
+        // Si usamos la IA, respetamos la respuesta pero actualizamos por si editaste los campos en la ventana
+        payload = m_iaJsonResult;
+        QJsonObject gasto = payload["gasto"].toObject();
+        gasto["comercio"] = m_localEdit->text();
+        gasto["monto"] = m_montoSpin->value();
+        gasto["fecha_gasto"] = m_fechaEdit->date().toString(Qt::ISODate);
+        gasto["categoria_sugerida"] = m_catCombo->currentText();
+        payload["gasto"] = gasto;
+    }
+
+    payload["id_usuario"] = 1; // El ID demo que maneja tu Python
+
+    // 1. Enviamos el paquete completo al VPS (Tu API Python)
+    DataManager::instance().guardarTicketCompletoServidor(payload);
+
+    // 2. Guardamos también en el archivo local JSON de la Mac para que aparezca al instante
+    Ticket t;
+    t.nombreLocal = m_localEdit->text();
+    t.monto = m_montoSpin->value();
+    t.fecha = m_fechaEdit->date();
+    t.categoria = m_catCombo->currentText();
+    t.imagenPath = m_imagenPath;
+    t.procesadoPorIA = !m_iaJsonResult.isEmpty();
+    DataManager::instance().addTicket(t);
+
+    QDialog::accept();
 }
 
 QString     UploadTicketDialog::imagenPath()  const { return m_imagenPath; }

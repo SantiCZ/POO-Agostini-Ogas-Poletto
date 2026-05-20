@@ -8,11 +8,14 @@
 #include <QPushButton>
 #include <QFrame>
 #include <QVBoxLayout>
+#include <QJsonObject>
 
 class UploadTicketDialog : public QDialog {
     Q_OBJECT
 public:
     explicit UploadTicketDialog(QWidget *parent = nullptr);
+
+    void accept() override; // Redefinido para impactar en la base de datos
 
     QString     imagenPath() const;
     QString     nombreLocal() const;
@@ -32,7 +35,6 @@ private:
     QLabel         *m_dropLabel     = nullptr;
     QLabel         *m_dropSub       = nullptr;
     QFrame         *m_dropZone      = nullptr;
-    QLabel         *m_previewLabel  = nullptr;
     QPushButton    *m_selectBtn     = nullptr;
     QPushButton    *m_analyzeBtn    = nullptr;
     QLineEdit      *m_localEdit     = nullptr;
@@ -43,5 +45,6 @@ private:
     QPushButton    *m_cancelBtn     = nullptr;
     QLabel         *m_statusLabel   = nullptr;
 
-    QString m_imagenPath;
+    QString     m_imagenPath;
+    QJsonObject m_iaJsonResult; // Guarda la respuesta nativa del servidor GPT
 };

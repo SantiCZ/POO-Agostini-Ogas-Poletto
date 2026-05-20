@@ -96,6 +96,9 @@ LoginDialog::LoginDialog(QWidget *parent) : QDialog(parent) {
     root->addWidget(m_stack);
 
     showLoginPanel();
+
+    // NUEVO: Conectamos la ventana con la respuesta del servidor VPS
+    connect(&DataManager::instance(), &DataManager::usuarioRegistradoServidor, this, &LoginDialog::onRegistroRespuesta);
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -248,7 +251,6 @@ void LoginDialog::buildRegisterPanel() {
         return l;
     };
 
-    // IMPORTANTE: usar m_regUsernameEdit (no m_regNameEdit)
     m_regUsernameEdit = new QLineEdit();
     m_regUsernameEdit->setPlaceholderText("ej: juanperez");
     m_regUsernameEdit->setFixedHeight(42);
@@ -363,7 +365,7 @@ void LoginDialog::onLogin() {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// REGISTRO real usando DataManager
+// REGISTRO real usando DataManager (MODIFICADO PARA RED)
 // ─────────────────────────────────────────────────────────────────
 void LoginDialog::onRegister() {
     QString username = m_regUsernameEdit->text().trimmed();
@@ -395,18 +397,42 @@ void LoginDialog::onRegister() {
         return;
     }
     if (DataManager::instance().userExists(username)) {
-        m_regErrorLabel->setText("El nombre de usuario ya existe. Elegí otro.");
+        m_regErrorLabel->setText("El nombre de usuario ya existe localmente. Elegí otro.");
         m_regErrorLabel->show();
         return;
     }
 
-    // Crear usuario
-    if (DataManager::instance().addUser(username, pass1)) {
-        m_username   = username;
+    // NUEVO: Si no ingresó email, generamos uno por defecto para que MySQL no falle
+    if (email.isEmpty()) {
+        email = username + "@email.com";
+    }
+
+    // Bloqueamos la interfaz mientras esperamos al servidor
+    m_registerBtn->setEnabled(false);
+    m_registerBtn->setText("Conectando al VPS...");
+
+    // Disparamos la petición al servidor (el hash MD5 se hace por dentro)
+    DataManager::instance().registrarUsuarioRed(username, email, pass1);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// NUEVO: RESPUESTA DEL SERVIDOR AL REGISTRO
+// ─────────────────────────────────────────────────────────────────
+void LoginDialog::onRegistroRespuesta(bool exito, const QString &mensaje) {
+    // Restauramos el botón
+    m_registerBtn->setEnabled(true);
+    m_registerBtn->setText("Crear cuenta");
+
+    if (exito) {
+        // Si el servidor confirma la creación, también lo guardamos en local
+        DataManager::instance().addUser(m_regUsernameEdit->text().trimmed(), m_regPassEdit->text());
+
+        m_username   = m_regUsernameEdit->text().trimmed();
         m_registered = true;
-        accept();   // cierra el diálogo (el main luego muestra mensaje)
+        accept();   // cierra el diálogo y entra a la app
     } else {
-        m_regErrorLabel->setText("Error al crear el usuario. Intentá de nuevo.");
+        // Si falló en la base de datos (ej: usuario ya registrado allá)
+        m_regErrorLabel->setText(mensaje);
         m_regErrorLabel->show();
     }
 }

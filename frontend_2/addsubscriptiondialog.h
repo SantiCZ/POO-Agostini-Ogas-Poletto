@@ -12,6 +12,8 @@ class AddSubscriptionDialog : public QDialog {
 public:
     explicit AddSubscriptionDialog(QWidget *parent = nullptr);
 
+    void accept() override; // NUEVO: Interceptamos el guardado
+
     QString nombreServicio() const;
     double  monto() const;
     QDate   fechaVencimiento() const;

@@ -1,9 +1,11 @@
 #include "addsubscriptiondialog.h"
 #include "models.h"
+#include "datamanager.h" // NUEVO: Para poder guardar los datos
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
 #include <QLabel>
+#include <QMessageBox>
 
 AddSubscriptionDialog::AddSubscriptionDialog(QWidget *parent) : QDialog(parent) {
     setWindowTitle("Nueva Suscripción");
@@ -149,11 +151,40 @@ void AddSubscriptionDialog::setupUI() {
         QPushButton { background-color: #38BDF8; color: #0F1117; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; }
         QPushButton:hover { background-color: #0EA5E9; }
     )");
-    connect(m_saveBtn, &QPushButton::clicked, this, &QDialog::accept);
+    // Aquí el botón saveBtn llamará al método accept() que programamos abajo
+    connect(m_saveBtn, &QPushButton::clicked, this, &AddSubscriptionDialog::accept);
 
     btnL->addWidget(m_cancelBtn, 1);
     btnL->addWidget(m_saveBtn, 2);
     mainL->addWidget(btnW);
+}
+
+// ──────────────────────────────────────────────────────────────
+// NUEVO: Método accept para enviar los datos a la DB y al JSON
+// ──────────────────────────────────────────────────────────────
+void AddSubscriptionDialog::accept() {
+    // Validamos que no se guarde una suscripción sin nombre
+    if (m_nombreEdit->text().trimmed().isEmpty()) {
+        QMessageBox::warning(this, "Atención", "Por favor ingresá el nombre del servicio.");
+        m_nombreEdit->setFocus();
+        return;
+    }
+
+    // 1. Armamos el objeto con los datos de la interfaz
+    Suscripcion s;
+    s.nombreServicio = m_nombreEdit->text().trimmed();
+    s.monto = m_montoSpin->value();
+    s.categoria = m_catCombo->currentText();
+    s.fechaVencimiento = m_fechaEdit->date();
+    s.diasAviso = m_diasSpin->value();
+    s.activa = true;
+    s.iconoNombre = s.nombreServicio.toLower().simplified();
+
+    // 2. Lo mandamos al VPS para que se guarde en MySQL
+    DataManager::instance().guardarSuscripcionRed(s);
+
+    // Cerramos la ventana
+    QDialog::accept();
 }
 
 QString AddSubscriptionDialog::nombreServicio() const { return m_nombreEdit->text(); }

@@ -7,6 +7,19 @@
 #include <QDir>
 #include <QCryptographicHash>
 #include <QDebug>
+#include <QMap>
+
+// ─── INCLUDES DE RED ──────────────────────────────────────────────
+#include <QHttpMultiPart>
+#include <QHttpPart>
+#include <QUrl>
+#include <QFileInfo>
+#include <QNetworkRequest>
+
+DataManager::DataManager() : QObject(nullptr), estadoActual(ESPERANDO) {
+    networkManager = new QNetworkAccessManager(this);
+    connect(networkManager, &QNetworkAccessManager::finished, this, &DataManager::onRespuestaRecibida);
+}
 
 DataManager& DataManager::instance() {
     static DataManager inst;
@@ -35,7 +48,6 @@ bool DataManager::loadFromFile() {
 
     QJsonObject root = doc.object();
 
-    // Tickets
     m_tickets.clear();
     QJsonArray ticketsArr = root["tickets"].toArray();
     for (const QJsonValue& v : ticketsArr) {
@@ -52,7 +64,6 @@ bool DataManager::loadFromFile() {
         m_tickets.append(t);
     }
 
-    // Suscripciones
     m_suscripciones.clear();
     QJsonArray subsArr = root["suscripciones"].toArray();
     for (const QJsonValue& v : subsArr) {
@@ -71,7 +82,6 @@ bool DataManager::loadFromFile() {
         m_suscripciones.append(s);
     }
 
-    // Usuarios
     m_users.clear();
     QJsonArray usersArr = root["usuarios"].toArray();
     for (const QJsonValue& v : usersArr) {
@@ -88,7 +98,6 @@ bool DataManager::loadFromFile() {
 
 bool DataManager::saveToFile() {
     QJsonObject root;
-
     QJsonArray ticketsArr;
     for (const Ticket& t : m_tickets) {
         QJsonObject obj;
@@ -137,16 +146,12 @@ bool DataManager::saveToFile() {
     return true;
 }
 
-// ──────────────────────────────────────────────────────────────
-// Tickets
-// ──────────────────────────────────────────────────────────────
 QVector<Ticket> DataManager::getTickets(const QString& categoriaFiltro, const QString& busqueda) const {
     QVector<Ticket> result;
     for (const Ticket& t : m_tickets) {
         bool matchCat = categoriaFiltro.isEmpty() || categoriaFiltro == "Todas las categorías" || t.categoria == categoriaFiltro;
         bool matchSearch = busqueda.isEmpty() || t.nombreLocal.contains(busqueda, Qt::CaseInsensitive);
-        if (matchCat && matchSearch)
-            result.append(t);
+        if (matchCat && matchSearch) result.append(t);
     }
     return result;
 }
@@ -168,12 +173,7 @@ bool DataManager::removeTicket(int id) {
     return false;
 }
 
-// ──────────────────────────────────────────────────────────────
-// Suscripciones
-// ──────────────────────────────────────────────────────────────
-QVector<Suscripcion> DataManager::getSuscripciones() const {
-    return m_suscripciones;
-}
+QVector<Suscripcion> DataManager::getSuscripciones() const { return m_suscripciones; }
 
 bool DataManager::addSuscripcion(const Suscripcion& s) {
     Suscripcion newS = s;
@@ -185,110 +185,21 @@ bool DataManager::addSuscripcion(const Suscripcion& s) {
 
 bool DataManager::updateSuscripcionEstado(int id, bool activa) {
     for (Suscripcion& s : m_suscripciones) {
-        if (s.id == id) {
-            s.activa = activa;
-            return saveToFile();
-        }
+        if (s.id == id) { s.activa = activa; return saveToFile(); }
     }
     return false;
 }
 
 bool DataManager::removeSuscripcion(int id) {
     for (int i = 0; i < m_suscripciones.size(); ++i) {
-        if (m_suscripciones[i].id == id) {
-            m_suscripciones.remove(i);
-            return saveToFile();
-        }
+        if (m_suscripciones[i].id == id) { m_suscripciones.remove(i); return saveToFile(); }
     }
     return false;
 }
 
 // ──────────────────────────────────────────────────────────────
-// Usuarios
+// ESTADÍSTICAS (Las que faltaban)
 // ──────────────────────────────────────────────────────────────
-QString DataManager::hashPassword(const QString& pwd) const {
-    QByteArray hash = QCryptographicHash::hash(pwd.toUtf8(), QCryptographicHash::Md5);
-    return hash.toHex();
-}
-
-int DataManager::nextUserId() const {
-    int max = 0;
-    for (const User& u : m_users) if (u.id > max) max = u.id;
-    return max + 1;
-}
-
-bool DataManager::addUser(const QString& username, const QString& password) {
-    if (userExists(username)) return false;
-    User u;
-    u.id = nextUserId();
-    u.username = username;
-    u.passwordHash = hashPassword(password);
-    m_users.append(u);
-    return saveToFile();
-}
-
-bool DataManager::login(const QString& username, const QString& password) {
-    QString hash = hashPassword(password);
-    for (const User& u : m_users) {
-        if (u.username == username && u.passwordHash == hash)
-            return true;
-    }
-    return false;
-}
-
-bool DataManager::userExists(const QString& username) {
-    for (const User& u : m_users) {
-        if (u.username == username) return true;
-    }
-    return false;
-}
-
-void DataManager::migrateUsers() {
-    if (m_users.isEmpty()) {
-        addUser("alcancia", "1234");
-    }
-}
-
-// ──────────────────────────────────────────────────────────────
-// IDs
-// ──────────────────────────────────────────────────────────────
-int DataManager::nextTicketId() const {
-    int max = 0;
-    for (const Ticket& t : m_tickets) if (t.id > max) max = t.id;
-    return max + 1;
-}
-
-int DataManager::nextSubId() const {
-    int max = 0;
-    for (const Suscripcion& s : m_suscripciones) if (s.id > max) max = s.id;
-    return max + 1;
-}
-
-// ──────────────────────────────────────────────────────────────
-// Estadísticas
-// ──────────────────────────────────────────────────────────────
-double DataManager::getGastoMes(int year, int month) const {
-    double total = 0;
-    for (const Ticket& t : m_tickets)
-        if (t.fecha.year() == year && t.fecha.month() == month)
-            total += t.monto;
-    return total;
-}
-
-int DataManager::getTicketCountMes(int year, int month) const {
-    int count = 0;
-    for (const Ticket& t : m_tickets)
-        if (t.fecha.year() == year && t.fecha.month() == month)
-            count++;
-    return count;
-}
-
-int DataManager::getSuscripcionesActivas() const {
-    int count = 0;
-    for (const Suscripcion& s : m_suscripciones)
-        if (s.activa) count++;
-    return count;
-}
 
 QVector<QPair<QString, double>> DataManager::getGastosPorCategoria(int year, int month) const {
     QMap<QString, double> map;
@@ -315,4 +226,180 @@ QVector<QPair<QString, double>> DataManager::getGastosPorSemana(int year, int mo
     for (int i = 1; i <= 4; ++i)
         res.append({QString("Sem %1").arg(i), semanas[i]});
     return res;
+}
+
+// ──────────────────────────────────────────────────────────────
+// OTROS MÉTODOS Y RED
+// ──────────────────────────────────────────────────────────────
+
+QString DataManager::hashPassword(const QString& pwd) const {
+    QByteArray hash = QCryptographicHash::hash(pwd.toUtf8(), QCryptographicHash::Md5);
+    return hash.toHex();
+}
+
+int DataManager::nextUserId() const {
+    int max = 0;
+    for (const User& u : m_users) if (u.id > max) max = u.id;
+    return max + 1;
+}
+
+bool DataManager::addUser(const QString& username, const QString& password) {
+    if (userExists(username)) return false;
+    User u;
+    u.id = nextUserId();
+    u.username = username;
+    u.passwordHash = hashPassword(password);
+    m_users.append(u);
+    return saveToFile();
+}
+
+bool DataManager::login(const QString& username, const QString& password) {
+    QString hash = hashPassword(password);
+    for (const User& u : m_users) {
+        if (u.username == username && u.passwordHash == hash) return true;
+    }
+    return false;
+}
+
+bool DataManager::userExists(const QString& username) {
+    for (const User& u : m_users) {
+        if (u.username == username) return true;
+    }
+    return false;
+}
+
+void DataManager::migrateUsers() {
+    if (m_users.isEmpty()) { addUser("alcancia", "1234"); }
+}
+
+int DataManager::nextTicketId() const {
+    int max = 0;
+    for (const Ticket& t : m_tickets) if (t.id > max) max = t.id;
+    return max + 1;
+}
+
+int DataManager::nextSubId() const {
+    int max = 0;
+    for (const Suscripcion& s : m_suscripciones) if (s.id > max) max = s.id;
+    return max + 1;
+}
+
+double DataManager::getGastoMes(int year, int month) const {
+    double total = 0;
+    for (const Ticket& t : m_tickets)
+        if (t.fecha.year() == year && t.fecha.month() == month) total += t.monto;
+    return total;
+}
+
+int DataManager::getTicketCountMes(int year, int month) const {
+    int count = 0;
+    for (const Ticket& t : m_tickets)
+        if (t.fecha.year() == year && t.fecha.month() == month) count++;
+    return count;
+}
+
+int DataManager::getSuscripcionesActivas() const {
+    int count = 0;
+    for (const Suscripcion& s : m_suscripciones) if (s.activa) count++;
+    return count;
+}
+
+void DataManager::cambiarEstadoRed(EstadoRed nuevoEstado) {
+    estadoActual = nuevoEstado;
+    emit estadoRedCambiado(estadoActual);
+}
+
+void DataManager::analizarTicketRed(const QString &rutaImagen) {
+    cambiarEstadoRed(ENVIANDO_FOTO);
+    QHttpMultiPart *multiPart = new QHttpMultiPart(QHttpMultiPart::FormDataType);
+    QHttpPart imagePart;
+    imagePart.setHeader(QNetworkRequest::ContentTypeHeader, QVariant("image/jpeg"));
+    imagePart.setHeader(QNetworkRequest::ContentDispositionHeader, QVariant("form-data; name=\"file\"; filename=\"" + QFileInfo(rutaImagen).fileName() + "\""));
+
+    QFile *file = new QFile(rutaImagen);
+    if (!file->open(QIODevice::ReadOnly)) {
+        emit errorDeRed("Error abriendo imagen.");
+        delete multiPart; delete file;
+        cambiarEstadoRed(ERROR_CONEXION);
+        return;
+    }
+    imagePart.setBodyDevice(file);
+    file->setParent(multiPart);
+    multiPart->append(imagePart);
+
+    QUrl url("http://161.97.92.143/api/v1/tickets/analizar");
+    QNetworkRequest request(url);
+    QNetworkReply *reply = networkManager->post(request, multiPart);
+    multiPart->setParent(reply);
+}
+
+void DataManager::guardarTicketCompletoServidor(const QJsonObject &jsonCompleto) {
+    QUrl url("http://161.97.92.143/api/v1/tickets/guardar");
+    QNetworkRequest request(url);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    QJsonDocument doc(jsonCompleto);
+    networkManager->post(request, doc.toJson());
+}
+
+void DataManager::registrarUsuarioRed(const QString &username, const QString &email, const QString &password) {
+    cambiarEstadoRed(ESPERANDO);
+    QUrl url("http://161.97.92.143/api/v1/usuarios/registro");
+    QNetworkRequest request(url);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    QString claveEncriptada = hashPassword(password);
+    QJsonObject jsonUser;
+    jsonUser["nombre"] = username;
+    jsonUser["email"] = email;
+    jsonUser["clave_hash"] = claveEncriptada;
+    QJsonDocument doc(jsonUser);
+    networkManager->post(request, doc.toJson());
+}
+
+void DataManager::guardarSuscripcionRed(const Suscripcion &s) {
+    QUrl url("http://161.97.92.143/api/v1/suscripciones/guardar");
+    QNetworkRequest request(url);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    QJsonObject json;
+    json["id_usuario"] = 1;
+    json["nombre"] = s.nombreServicio;
+    json["monto"] = s.monto;
+    json["categoria"] = s.categoria;
+    json["vencimiento"] = s.fechaVencimiento.toString(Qt::ISODate);
+    json["alerta_dias"] = s.diasAviso;
+    json["notas"] = s.descripcion.isEmpty() ? "Suscripción agregada desde UI" : s.descripcion;
+    json["moneda"] = "ARS";
+    json["frecuencia"] = "mensual";
+
+    QJsonDocument doc(json);
+    networkManager->post(request, doc.toJson());
+}
+
+void DataManager::onRespuestaRecibida(QNetworkReply *reply) {
+    if (reply->error() != QNetworkReply::NoError) {
+        emit errorDeRed("Error de red: " + reply->errorString());
+        cambiarEstadoRed(ERROR_CONEXION);
+        reply->deleteLater();
+        return;
+    }
+
+    QByteArray responseData = reply->readAll();
+    QJsonDocument jsonDoc = QJsonDocument::fromJson(responseData);
+    if (!jsonDoc.isObject()) { reply->deleteLater(); return; }
+
+    QJsonObject root = jsonDoc.object();
+    QString path = reply->url().path();
+
+    if (path.contains("/analizar")) {
+        QJsonObject gastoObj = root["gasto"].toObject();
+        emit ticketProcesadoRed(gastoObj["comercio"].toString(), gastoObj["monto"].toDouble(), gastoObj["fecha_gasto"].toString(), gastoObj["categoria_sugerida"].toString(), root);
+        cambiarEstadoRed(EXITO);
+    } else if (path.contains("/guardar")) {
+        emit ticketGuardadoServidor(root["status"].toString() == "ok", root["message"].toString());
+    } else if (path.contains("/registro")) {
+        emit usuarioRegistradoServidor(root["status"].toString() == "ok", root["message"].toString());
+    } else if (path.contains("/suscripciones/guardar")) {
+        emit suscripcionGuardadaServidor(root["status"].toString() == "ok", root["message"].toString());
+    }
+    reply->deleteLater();
 }
