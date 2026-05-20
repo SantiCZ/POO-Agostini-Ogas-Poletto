@@ -1,4 +1,4 @@
-QT += core gui widgets network
+QT += core gui widgets network sql
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -8,6 +8,7 @@ TARGET = frontend_2
 TEMPLATE = app
 
 SOURCES += \
+    admindb.cpp \
     main.cpp \
     mainwidget.cpp \
     sidebar.cpp \
@@ -22,6 +23,7 @@ SOURCES += \
     logindialog.cpp
 
 HEADERS += \
+    admindb.h \
     mainwidget.h \
     sidebar.h \
     dashboardpage.h \
@@ -34,3 +36,5 @@ HEADERS += \
     models.h \
     datamanager.h \
     logindialog.h
+
+
