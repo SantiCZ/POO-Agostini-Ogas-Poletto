@@ -271,17 +271,8 @@ void TicketsPage::addTicketCard(const Ticket &t) {
 void TicketsPage::onUploadClicked() {
     UploadTicketDialog dlg(this);
     if (dlg.exec() == QDialog::Accepted) {
-        Ticket t;
-        t.id = 0;
-        t.monto = dlg.monto();
-        t.fecha = dlg.fecha();
-        t.categoria = dlg.categoria();
-        t.nombreLocal = dlg.nombreLocal().isEmpty() ? "Sin nombre" : dlg.nombreLocal();
-        t.imagenPath = dlg.imagenPath();
-        t.procesadoPorIA = !dlg.imagenPath().isEmpty();
-        t.descripcion = "";
-        if (DataManager::instance().addTicket(t)) {
-            refreshData();
-        }
+        // Como UploadTicketDialog ya se encargó de guardar todo (en VPS y local),
+        // acá solamente le decimos a la lista que se vuelva a dibujar.
+        refreshData();
     }
 }

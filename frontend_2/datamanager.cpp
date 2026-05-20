@@ -157,8 +157,18 @@ QVector<Ticket> DataManager::getTickets(const QString& categoriaFiltro, const QS
 }
 
 bool DataManager::addTicket(const Ticket& t) {
+    // Verificamos si ya existe un ticket con el mismo ID para evitar duplicados
+    for (const Ticket& existingT : m_tickets) {
+        if (existingT.id == t.id) {
+            qDebug() << "Intento de duplicado detectado, ignorando.";
+            return false;
+        }
+    }
+
     Ticket newT = t;
-    newT.id = nextTicketId();
+    // Si el ID es 0, asignamos uno nuevo, si ya tiene ID, lo respetamos
+    if (newT.id == 0) newT.id = nextTicketId();
+
     m_tickets.append(newT);
     return saveToFile();
 }
