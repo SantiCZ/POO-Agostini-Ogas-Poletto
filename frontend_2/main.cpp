@@ -10,6 +10,10 @@
 #include <QSqlQuery> // Permite ejecutar consultas SQL
 #include <QSqlError> // Permite leer errores SQL
 
+#include <QFile>
+#include <QIODevice>
+#include <QDir>
+
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
 
@@ -28,6 +32,22 @@ int main(int argc, char *argv[]) {
     if (dbProyecto.conectar("C:/sqlite/tasty_alcancia.db"))
     {
         qDebug() << "Base conectada correctamente";
+
+        QFile archivoJson("sync_test.json");
+
+        qDebug() << "Buscando JSON en:" << QDir::currentPath();
+
+        if (archivoJson.open(QIODevice::ReadOnly))
+        {
+            QByteArray datosJson = archivoJson.readAll();
+            archivoJson.close();
+
+            dbProyecto.sincronizarDesdeJson(datosJson);
+        }
+        else
+        {
+            qDebug() << "No se pudo abrir sync_test.json";
+        }
     }
     else
     {
