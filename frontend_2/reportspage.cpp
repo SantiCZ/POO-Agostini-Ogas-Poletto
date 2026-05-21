@@ -137,7 +137,7 @@ void ReportsPage::setupUI() {
     mainL->setContentsMargins(32, 28, 32, 32);
     mainL->setSpacing(24);
 
-    // Header
+    // ── Header ────────────────────────────────────────────────────
     QWidget *headerW = new QWidget();
     headerW->setStyleSheet("background: transparent;");
     QHBoxLayout *headerL = new QHBoxLayout(headerW);
@@ -173,7 +173,7 @@ void ReportsPage::setupUI() {
     headerL->addWidget(exportBtn);
     mainL->addWidget(headerW);
 
-    // Summary cards
+    // ── Summary cards ─────────────────────────────────────────────
     QWidget *cardsW = new QWidget();
     cardsW->setStyleSheet("background: transparent;");
     m_summaryLayout = new QHBoxLayout(cardsW);
@@ -181,7 +181,7 @@ void ReportsPage::setupUI() {
     m_summaryLayout->setSpacing(14);
     mainL->addWidget(cardsW);
 
-    // Mid section
+    // ── Mid section ───────────────────────────────────────────────
     QWidget *midW = new QWidget();
     midW->setStyleSheet("background: transparent;");
     QHBoxLayout *midL = new QHBoxLayout(midW);
@@ -227,63 +227,81 @@ void ReportsPage::refreshData() {
     clearLayout(m_breakdownLayout);
 
     QDate now = QDate::currentDate();
-    int year = now.year();
+    int year  = now.year();
     int month = now.month();
-    double gastoMes = DataManager::instance().getGastoMes(year, month);
-    double gastoMesAnterior = DataManager::instance().getGastoMes(year, month-1);
-    int ticketCount = DataManager::instance().getTicketCountMes(year, month);
-    double promedio = (ticketCount > 0) ? gastoMes / ticketCount : 0;
+    double gastoMes         = DataManager::instance().getGastoMes(year, month);
+    double gastoMesAnterior = DataManager::instance().getGastoMes(year, month - 1);
+    int    ticketCount      = DataManager::instance().getTicketCountMes(year, month);
+    double promedio         = (ticketCount > 0) ? gastoMes / ticketCount : 0;
 
-    // Summary cards
+    // ── Summary cards (sin bordes) ────────────────────────────────
     struct Card { QString icon, label, val, sub, color; };
     QVector<Card> cards = {
-                           {"💸", "TOTAL GASTADO",  QString("$%1").arg(gastoMes, 0, 'f', 0), "este mes",    "#4ADE80"},
-                           {"📈", "MES ANTERIOR",   QString("$%1").arg(gastoMesAnterior, 0, 'f', 0), "",     "#F472B6"},
-                           {"🧾", "TICKETS",        QString::number(ticketCount), "registrados",  "#818CF8"},
-                           {"⌀",  "GASTO PROMEDIO", QString("$%1").arg(promedio, 0, 'f', 2), "por ticket",   "#38BDF8"},
+                           {"💸", "TOTAL GASTADO",  QString("$%1").arg(gastoMes, 0, 'f', 0),          "este mes",    "#4ADE80"},
+                           {"📈", "MES ANTERIOR",   QString("$%1").arg(gastoMesAnterior, 0, 'f', 0),  "",            "#F472B6"},
+                           {"🧾", "TICKETS",        QString::number(ticketCount),                      "registrados", "#818CF8"},
+                           {"⌀",  "GASTO PROMEDIO", QString("$%1").arg(promedio, 0, 'f', 2),          "por ticket",  "#38BDF8"},
                            };
+
     for (auto &c : cards) {
         QFrame *card = new QFrame();
-        card->setStyleSheet("QFrame { background-color: #1A1D27; border: 1px solid #2E3347; border-radius: 12px; }");
+        // ← sin border
+        card->setStyleSheet(
+            "QFrame { background-color: #1A1D27; border: none; border-radius: 12px; }"
+            );
         card->setFixedHeight(90);
         QVBoxLayout *l = new QVBoxLayout(card);
         l->setContentsMargins(16, 12, 16, 12);
         l->setSpacing(3);
+
         QLabel *iconL = new QLabel(c.icon + "  " + c.label);
-        iconL->setStyleSheet("color: #64748B; font-size: 11px; font-weight: 600; background: transparent;");
+        iconL->setStyleSheet("color: #64748B; font-size: 11px; font-weight: 600; "
+                             "background: transparent; border: none;");
         QLabel *valL = new QLabel(c.val);
-        valL->setStyleSheet(QString("color: %1; font-size: 20px; font-weight: 700; background: transparent;").arg(c.color));
+        valL->setStyleSheet(QString("color: %1; font-size: 20px; font-weight: 700; "
+                                    "background: transparent; border: none;").arg(c.color));
         QLabel *subL = new QLabel(c.sub);
-        subL->setStyleSheet("color: #475569; font-size: 11px; background: transparent;");
+        subL->setStyleSheet("color: #475569; font-size: 11px; "
+                            "background: transparent; border: none;");
+
         l->addWidget(iconL);
         l->addWidget(valL);
         l->addWidget(subL);
         m_summaryLayout->addWidget(card);
     }
 
-    // Bar chart (gastos por semana)
+    // ── Bar chart ─────────────────────────────────────────────────
     auto semanas = DataManager::instance().getGastosPorSemana(year, month);
     double maxSem = 0;
     for (auto &p : semanas) if (p.second > maxSem) maxSem = p.second;
     maxSem = qMax(maxSem, 1.0);
+
     QLabel *chartTitle = new QLabel("Gastos por Semana");
-    chartTitle->setStyleSheet("color: #F1F5F9; font-size: 16px; font-weight: 700; background: transparent;");
+    chartTitle->setStyleSheet("color: #F1F5F9; font-size: 16px; font-weight: 700; "
+                              "background: transparent; border: none;");
     m_chartLayout->addWidget(chartTitle);
-    QFrame *card = new QFrame();
-    card->setStyleSheet("QFrame { background-color: #1A1D27; border: 1px solid #2E3347; border-radius: 14px; }");
-    QVBoxLayout *cardL = new QVBoxLayout(card);
+
+    QFrame *chartCard = new QFrame();
+    chartCard->setStyleSheet(
+        "QFrame { background-color: #1A1D27; border: none; border-radius: 14px; }"
+        );
+    QVBoxLayout *cardL = new QVBoxLayout(chartCard);
     cardL->setContentsMargins(20, 16, 20, 16);
     BarChart *chart = new BarChart();
     chart->setData(semanas, maxSem);
     cardL->addWidget(chart);
-    m_chartLayout->addWidget(card);
+    m_chartLayout->addWidget(chartCard);
 
-    // Category breakdown
+    // ── Category breakdown ────────────────────────────────────────
     QLabel *breakTitle = new QLabel("Por Categoría");
-    breakTitle->setStyleSheet("color: #F1F5F9; font-size: 16px; font-weight: 700; background: transparent;");
+    breakTitle->setStyleSheet("color: #F1F5F9; font-size: 16px; font-weight: 700; "
+                              "background: transparent; border: none;");
     m_breakdownLayout->addWidget(breakTitle);
+
     QFrame *breakCard = new QFrame();
-    breakCard->setStyleSheet("QFrame { background-color: #1A1D27; border: 1px solid #2E3347; border-radius: 14px; }");
+    breakCard->setStyleSheet(
+        "QFrame { background-color: #1A1D27; border: none; border-radius: 14px; }"
+        );
     QVBoxLayout *breakCardL = new QVBoxLayout(breakCard);
     breakCardL->setContentsMargins(16, 16, 16, 16);
     breakCardL->setSpacing(6);
@@ -294,34 +312,36 @@ void ReportsPage::refreshData() {
     maxCat = qMax(maxCat, 1.0);
 
     QMap<QString,QString> icons = {
-        {"Supermercado","🛒"},{"Restaurante","🍕"},{"Transporte","🚌"},
-        {"Salud","💊"},{"Entretenimiento","🎬"},{"Servicios","⚡"},
-        {"Ropa","👕"},{"Tecnología","💻"},{"Otro","📋"}
+        {"Supermercado","🛒"}, {"Restaurante","🍕"}, {"Transporte","🚌"},
+        {"Salud","💊"},        {"Entretenimiento","🎬"}, {"Servicios","⚡"},
+        {"Ropa","👕"},         {"Tecnología","💻"},  {"Otro","📋"}
     };
+
     QVector<std::tuple<QString,QString,double,QString>> ordered;
     for (auto &p : cats) {
-        QString icon = icons.value(p.first, "📋");
-        QString color = "#38BDF8";
-        if (p.first == "Supermercado") color = "#4ADE80";
-        else if (p.first == "Servicios") color = "#38BDF8";
-        else if (p.first == "Transporte") color = "#818CF8";
-        else if (p.first == "Restaurante") color = "#FBBF24";
-        else if (p.first == "Salud") color = "#F472B6";
-        else color = "#FB923C";
+        QString icon  = icons.value(p.first, "📋");
+        QString color = "#FB923C";
+        if      (p.first == "Supermercado")   color = "#4ADE80";
+        else if (p.first == "Servicios")      color = "#38BDF8";
+        else if (p.first == "Transporte")     color = "#818CF8";
+        else if (p.first == "Restaurante")    color = "#FBBF24";
+        else if (p.first == "Salud")          color = "#F472B6";
         ordered.append({icon, p.first, p.second, color});
     }
     std::sort(ordered.begin(), ordered.end(), [](const auto &a, const auto &b) {
         return std::get<2>(a) > std::get<2>(b);
     });
+
     for (auto &[icon, cat, monto, color] : ordered) {
         breakCardL->addWidget(new CategoryBar(icon, cat, monto, maxCat, color));
     }
     if (ordered.isEmpty()) {
         QLabel *empty = new QLabel("Sin datos de gastos");
         empty->setAlignment(Qt::AlignCenter);
-        empty->setStyleSheet("color: #64748B; padding: 20px;");
+        empty->setStyleSheet("color: #64748B; padding: 20px; border: none;");
         breakCardL->addWidget(empty);
     }
+
     m_breakdownLayout->addWidget(breakCard);
     m_breakdownLayout->addStretch();
 }

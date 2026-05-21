@@ -40,6 +40,9 @@ QString StyleManager::appStyleSheet() {
             background: #2E3347;
             border-radius: 3px;
         }
+        QFrame {
+            border: none;
+        }
         QToolTip {
             background-color: #21253A;
             color: #F1F5F9;

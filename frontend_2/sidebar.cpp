@@ -1,10 +1,14 @@
 #include "sidebar.h"
+#include "stylemanager.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QSpacerItem>
 #include <QPainter>
 #include <QGraphicsDropShadowEffect>
+#include <QMenu>
+#include <QAction>
+#include <QCursor>
 
 // ─── SidebarButton ────────────────────────────────────────────────
 SidebarButton::SidebarButton(const QString &icon, const QString &text, QWidget *parent)
@@ -62,12 +66,7 @@ void SidebarButton::updateStyle(bool active) {
 Sidebar::Sidebar(QWidget *parent) : QWidget(parent) {
     setObjectName("sidebar");
     setFixedWidth(240);
-    setStyleSheet(R"(
-        QWidget#sidebar {
-            background-color: #13161F;
-            border-right: 1px solid #1E2235;
-        }
-    )");
+    setStyleSheet(StyleManager::sidebarStyle());
     setupUI();
 }
 
@@ -95,12 +94,12 @@ void Sidebar::setupUI() {
     logoName->setStyleSheet(
         "color: #F1F5F9; font-size: 18px; font-weight: 700; "
         "background: transparent; letter-spacing: -0.3px;"
-    );
+        );
     QLabel *logoSub = new QLabel("Asistente financiero");
     logoSub->setStyleSheet(
         "color: #4ADE80; font-size: 10px; font-weight: 500; "
         "background: transparent; letter-spacing: 0.5px;"
-    );
+        );
 
     logoTextL->addWidget(logoName);
     logoTextL->addWidget(logoSub);
@@ -122,18 +121,17 @@ void Sidebar::setupUI() {
     secLabel->setStyleSheet(
         "color: #374151; font-size: 10px; font-weight: 700; "
         "letter-spacing: 1.5px; padding-left: 18px; background: transparent;"
-    );
+        );
     m_layout->addWidget(secLabel);
     m_layout->addSpacing(6);
 
-    // Botones de navegación
     struct NavItem { QString icon; QString label; };
     QVector<NavItem> items = {
-        {"🏠", "Dashboard"},
-        {"🧾", "Tickets"},
-        {"🔄", "Suscripciones"},
-        {"📊", "Reportes"},
-    };
+                              {"🏠", "Dashboard"},
+                              {"🧾", "Tickets"},
+                              {"🔄", "Suscripciones"},
+                              {"📊", "Reportes"},
+                              };
 
     m_btnGroup = new QButtonGroup(this);
     m_btnGroup->setExclusive(true);
@@ -159,20 +157,51 @@ void Sidebar::setupUI() {
     m_layout->addWidget(sep2);
     m_layout->addSpacing(12);
 
-    // ── Perfil de usuario ─────────────────────────────────────────
-    QWidget *profileW = new QWidget();
-    profileW->setStyleSheet("background: transparent;");
-    QHBoxLayout *profileL = new QHBoxLayout(profileW);
-    profileL->setContentsMargins(12, 8, 12, 8);
+    // ── Indicador de sincronización ───────────────────────────────
+    m_syncIcon = new QLabel();
+    m_syncIcon->setMinimumWidth(160);
+    m_syncIcon->setFixedHeight(28);
+    m_syncIcon->setAlignment(Qt::AlignCenter);
+    m_syncIcon->setStyleSheet("background: transparent; font-size: 14px; letter-spacing: 4px;");
+    setSyncStatus(true, 0);
+    m_layout->addWidget(m_syncIcon, 0, Qt::AlignCenter);
+    m_layout->addSpacing(6);
+
+    // ── Perfil de usuario (clickeable → menú) ─────────────────────
+    m_profileBtn = new QPushButton();
+    m_profileBtn->setFixedHeight(56);
+    m_profileBtn->setCursor(Qt::PointingHandCursor);
+    m_profileBtn->setStyleSheet(R"(
+        QPushButton {
+            background-color: #1A1D27;
+            border: 1px solid #2E3347;
+            border-radius: 10px;
+            text-align: left;
+            padding: 0px;
+        }
+        QPushButton:hover {
+            background-color: #21253A;
+            border: 1px solid #4ADE80;
+        }
+        QPushButton:pressed {
+            background-color: #2E3347;
+        }
+    )");
+
+    // Layout interno del botón de perfil
+    QWidget *profileInner = new QWidget(m_profileBtn);
+    profileInner->setAttribute(Qt::WA_TransparentForMouseEvents);
+    profileInner->setStyleSheet("background: transparent;");
+    QHBoxLayout *profileL = new QHBoxLayout(profileInner);
+    profileL->setContentsMargins(10, 8, 10, 8);
     profileL->setSpacing(10);
 
     QLabel *avatar = new QLabel("👤");
     avatar->setFixedSize(36, 36);
     avatar->setAlignment(Qt::AlignCenter);
     avatar->setStyleSheet(
-        "background-color: #21253A; border-radius: 18px; "
-        "font-size: 18px;"
-    );
+        "background-color: #21253A; border-radius: 18px; font-size: 18px;"
+        );
 
     QWidget *userInfoW = new QWidget();
     userInfoW->setStyleSheet("background: transparent;");
@@ -180,25 +209,96 @@ void Sidebar::setupUI() {
     userInfoL->setContentsMargins(0, 0, 0, 0);
     userInfoL->setSpacing(1);
 
-    QLabel *userName = new QLabel("Mi Cuenta");
-    userName->setStyleSheet(
+    m_userNameLabel = new QLabel("Mi Cuenta");
+    m_userNameLabel->setStyleSheet(
         "color: #F1F5F9; font-size: 13px; font-weight: 600; background: transparent;"
-    );
-    QLabel *userEmail = new QLabel("usuario@email.com");
-    userEmail->setStyleSheet(
+        );
+    m_userEmailLabel = new QLabel("usuario@email.com");
+    m_userEmailLabel->setStyleSheet(
         "color: #64748B; font-size: 11px; background: transparent;"
-    );
+        );
 
-    userInfoL->addWidget(userName);
-    userInfoL->addWidget(userEmail);
+    userInfoL->addWidget(m_userNameLabel);
+    userInfoL->addWidget(m_userEmailLabel);
     profileL->addWidget(avatar);
-    profileL->addWidget(userInfoW);
-    profileL->addStretch();
+    profileL->addWidget(userInfoW, 1);
 
-    m_layout->addWidget(profileW);
+    // Flecha indicando que es clickeable
+    QLabel *arrowL = new QLabel("⋮");
+    arrowL->setStyleSheet("color: #475569; font-size: 16px; background: transparent;");
+    profileL->addWidget(arrowL);
 
-    // Activar primer botón
+    // Ajustar tamaño del widget interno al botón
+    profileInner->setGeometry(0, 0, m_profileBtn->width(), m_profileBtn->height());
+    connect(m_profileBtn, &QPushButton::clicked, this, &Sidebar::onProfileClicked);
+
+    m_layout->addWidget(m_profileBtn);
+    m_layout->addSpacing(10);
+
     setActivePage(0);
+}
+
+void Sidebar::onProfileClicked() {
+    // Construir menú con estilo oscuro
+    QMenu *menu = new QMenu(this);
+    menu->setStyleSheet(R"(
+        QMenu {
+            background-color: #1A1D27;
+            border: 1px solid #2E3347;
+            border-radius: 10px;
+            padding: 6px;
+        }
+        QMenu::item {
+            color: #E2E8F0;
+            font-size: 13px;
+            padding: 10px 16px;
+            border-radius: 6px;
+        }
+        QMenu::item:selected {
+            background-color: #21253A;
+            color: #F1F5F9;
+        }
+        QMenu::separator {
+            height: 1px;
+            background-color: #2E3347;
+            margin: 4px 8px;
+        }
+    )");
+
+    // Encabezado con nombre (no clickeable)
+    QAction *headerAction = new QAction(
+        QString("👤  %1").arg(m_userNameLabel->text()), this
+        );
+    headerAction->setEnabled(false);
+    headerAction->setCheckable(false);
+    menu->addAction(headerAction);
+    menu->addSeparator();
+
+    // Opción: cambiar datos
+    QAction *editAction = new QAction("✏️   Cambiar datos", this);
+    connect(editAction, &QAction::triggered, this, &Sidebar::editProfileRequested);
+    menu->addAction(editAction);
+
+    // Opción: cambiar contraseña
+    QAction *passAction = new QAction("🔑   Cambiar contraseña", this);
+    connect(passAction, &QAction::triggered, this, &Sidebar::changePasswordRequested);
+    menu->addAction(passAction);
+
+    menu->addSeparator();
+
+    // Opción: cerrar sesión
+    QAction *logoutAction = new QAction("🚪   Cerrar sesión", this);
+    logoutAction->setCheckable(false);
+    // Color rojo para cerrar sesión
+    menu->setStyleSheet(menu->styleSheet() + R"(
+        QMenu::item[logoutItem="true"] { color: #F87171; }
+    )");
+    connect(logoutAction, &QAction::triggered, this, &Sidebar::logoutRequested);
+    menu->addAction(logoutAction);
+
+    // Mostrar el menú justo encima del botón de perfil
+    QPoint pos = m_profileBtn->mapToGlobal(QPoint(0, -menu->sizeHint().height() - 4));
+    menu->exec(pos);
 }
 
 void Sidebar::setActivePage(int index) {
@@ -206,5 +306,24 @@ void Sidebar::setActivePage(int index) {
     for (int i = 0; i < m_navButtons.size(); ++i) {
         m_navButtons[i]->setActive(i == index);
         m_navButtons[i]->setChecked(i == index);
+    }
+}
+
+void Sidebar::setUserInfo(const QString &name, const QString &email) {
+    if (m_userNameLabel)  m_userNameLabel->setText(name);
+    if (m_userEmailLabel) m_userEmailLabel->setText(email);
+}
+
+void Sidebar::setSyncStatus(bool online, int pending) {
+    if (!m_syncIcon) return;
+    if (online && pending == 0) {
+        m_syncIcon->setText("✅  ☁️");
+        m_syncIcon->setToolTip("Todo sincronizado");
+    } else if (online && pending > 0) {
+        m_syncIcon->setText("🔄  ☁️");
+        m_syncIcon->setToolTip(QString("Sincronizando (%1 cambios pendientes)").arg(pending));
+    } else {
+        m_syncIcon->setText("🔴  ☁️");
+        m_syncIcon->setToolTip(QString("Desconectado. %1 cambios locales pendientes").arg(pending));
     }
 }

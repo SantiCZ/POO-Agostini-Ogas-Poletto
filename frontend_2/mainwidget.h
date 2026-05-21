@@ -2,6 +2,7 @@
 #include <QWidget>
 #include <QStackedWidget>
 #include <QHBoxLayout>
+#include <QTimer>
 #include "sidebar.h"
 #include "dashboardpage.h"
 #include "ticketspage.h"
@@ -14,9 +15,14 @@ public:
     explicit MainWidget(QWidget *parent = nullptr);
     ~MainWidget() = default;
 
+private slots:
+    void onLogout();
+    void onRefreshTimer();
+
 private:
     void setupUI();
     void applyStyles();
+    void refreshAllPages();
 
     Sidebar            *m_sidebar      = nullptr;
     QStackedWidget     *m_stack        = nullptr;
@@ -24,4 +30,5 @@ private:
     TicketsPage        *m_tickets      = nullptr;
     SubscriptionsPage  *m_subs         = nullptr;
     ReportsPage        *m_reports      = nullptr;
+    QTimer             *m_refreshTimer = nullptr;
 };

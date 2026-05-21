@@ -1,4 +1,4 @@
-QT += core gui widgets network sql
+QT       += core gui widgets
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -8,22 +8,21 @@ TARGET = frontend_2
 TEMPLATE = app
 
 SOURCES += \
-    admindb.cpp \
-    main.cpp \
-    mainwidget.cpp \
-    sidebar.cpp \
-    dashboardpage.cpp \
-    ticketspage.cpp \
-    subscriptionspage.cpp \
-    reportspage.cpp \
-    uploadticketdialog.cpp \
-    addsubscriptiondialog.cpp \
-    stylemanager.cpp \
-    datamanager.cpp \
-    logindialog.cpp
+    ../addsubscriptiondialog.cpp \
+    ../dashboardpage.cpp \
+    ../datamanager.cpp \
+    ../logindialog.cpp \
+    ../main.cpp \
+    ../mainwidget.cpp \
+    ../reportspage.cpp \
+    ../sidebar.cpp \
+    ../stylemanager.cpp \
+    ../subscriptionspage.cpp \
+    ../ticketspage.cpp \
+    ../uploadticketdialog.cpp \
+
 
 HEADERS += \
-    admindb.h \
     mainwidget.h \
     sidebar.h \
     dashboardpage.h \
@@ -36,5 +35,3 @@ HEADERS += \
     models.h \
     datamanager.h \
     logindialog.h
-
-

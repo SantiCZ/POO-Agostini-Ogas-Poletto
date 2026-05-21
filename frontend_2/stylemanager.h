@@ -10,6 +10,7 @@ public:
     static QString dangerButtonStyle();
     static QString inputStyle();
     static QString sidebarStyle();
+    static QString logoutButtonStyle();  // ← nuevo método
 
     // Paleta de colores
     static constexpr const char* BG_DARK    = "#0F1117";

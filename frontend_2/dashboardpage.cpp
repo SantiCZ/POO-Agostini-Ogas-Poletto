@@ -4,9 +4,8 @@
 #include <QGraphicsDropShadowEffect>
 #include <QPainter>
 #include <QLocale>
-#include <QDate>
 
-// ─── StatCard ─────────────────────────────────────────────
+// ─── StatCard sin borde ──────────────────────────────────────────
 StatCard::StatCard(const QString &icon, const QString &title,
                    const QString &value, const QString &subtitle,
                    const QString &accentColor, QWidget *parent)
@@ -14,10 +13,11 @@ StatCard::StatCard(const QString &icon, const QString &title,
 {
     setFixedHeight(120);
     setMinimumWidth(180);
+    // Eliminamos el borde visible
     setStyleSheet(QString(R"(
         QFrame {
             background-color: #1A1D27;
-            border: 1px solid #2E3347;
+            border: none;
             border-radius: 14px;
         }
     )"));
@@ -67,7 +67,7 @@ StatCard::StatCard(const QString &icon, const QString &title,
     root->addStretch();
 }
 
-// ─── RecentExpenseRow ─────────────────────────────────────
+// ─── RecentExpenseRow (sin cambios) ──────────────────────────────
 RecentExpenseRow::RecentExpenseRow(const QString &icon, const QString &nombre,
                                    const QString &categoria, const QString &fecha,
                                    double monto, QWidget *parent)
@@ -108,7 +108,7 @@ RecentExpenseRow::RecentExpenseRow(const QString &icon, const QString &nombre,
     layout->addWidget(montoL);
 }
 
-// ─── DashboardPage ────────────────────────────────────────
+// ─── DashboardPage ────────────────────────────────────────────────
 DashboardPage::DashboardPage(QWidget *parent) : QWidget(parent) {
     setStyleSheet("background: transparent;");
     setupUI();
@@ -127,7 +127,7 @@ void DashboardPage::setupUI() {
     mainL->setContentsMargins(32, 28, 32, 32);
     mainL->setSpacing(24);
 
-    // Encabezado
+    // Encabezado con fecha en español
     QWidget *headerW = new QWidget();
     headerW->setStyleSheet("background: transparent;");
     QHBoxLayout *headerL = new QHBoxLayout(headerW);
@@ -146,7 +146,9 @@ void DashboardPage::setupUI() {
     greetL->addWidget(greetTitle);
     greetL->addWidget(greetSub);
 
-    QLabel *dateLabel = new QLabel(QDate::currentDate().toString("dddd, d 'de' MMMM"));
+    // Fecha en español usando QLocale
+    QLocale spanish(QLocale::Spanish, QLocale::Argentina);
+    QLabel *dateLabel = new QLabel(spanish.toString(QDate::currentDate(), "dddd, d 'de' MMMM"));
     dateLabel->setStyleSheet(
         "color: #4ADE80; font-size: 12px; font-weight: 500; "
         "background-color: rgba(74,222,128,0.08); "
@@ -174,16 +176,14 @@ void DashboardPage::setupUI() {
     bottomL->setContentsMargins(0,0,0,0);
     bottomL->setSpacing(20);
 
-    // Actividad reciente
     QWidget *leftW = new QWidget();
     leftW->setStyleSheet("background: transparent;");
     QVBoxLayout *leftL = new QVBoxLayout(leftW);
     leftL->setContentsMargins(0,0,0,0);
     leftL->setSpacing(12);
     buildRecentActivity(leftL);
-    m_activityLayout = leftL; // guardar para limpiar
+    m_activityLayout = leftL;
 
-    // Panel derecho
     QWidget *rightW = new QWidget();
     rightW->setStyleSheet("background: transparent;");
     rightW->setFixedWidth(280);
@@ -192,7 +192,7 @@ void DashboardPage::setupUI() {
     rightL->setSpacing(16);
     buildQuickActions(rightL);
     buildSubsAlert(rightL);
-    m_alertLayout = rightL; // guardar
+    m_alertLayout = rightL;
 
     bottomL->addWidget(leftW, 1);
     bottomL->addWidget(rightW);
@@ -215,7 +215,6 @@ void DashboardPage::clearLayout(QLayout *layout) {
 }
 
 void DashboardPage::refreshData() {
-    // Stats
     clearLayout(m_statsLayout);
     QDate now = QDate::currentDate();
     int year = now.year();
@@ -223,7 +222,6 @@ void DashboardPage::refreshData() {
     double gastoMes = DataManager::instance().getGastoMes(year, month);
     int ticketCount = DataManager::instance().getTicketCountMes(year, month);
     int subsActivas = DataManager::instance().getSuscripcionesActivas();
-    // Próximos vencimientos (suscripciones activas que vencen en los próximos 7 días)
     int proximas = 0;
     for (const Suscripcion& s : DataManager::instance().getSuscripciones()) {
         if (s.activa) {
@@ -231,14 +229,14 @@ void DashboardPage::refreshData() {
             if (days >= 0 && days <= 7) proximas++;
         }
     }
+    // Usar el mismo locale para el nombre del mes si se desea, pero "now.toString("MMMM yyyy")" ya se traduce por el locale global
     m_statsLayout->addWidget(new StatCard("💰", "GASTO DEL MES", QString("$%1").arg(gastoMes, 0, 'f', 0), now.toString("MMMM yyyy"), "#4ADE80"));
     m_statsLayout->addWidget(new StatCard("🧾", "TICKETS", QString::number(ticketCount), "este mes", "#818CF8"));
     m_statsLayout->addWidget(new StatCard("🔄", "SUSCRIPCIONES", QString::number(subsActivas), "activas", "#38BDF8"));
     m_statsLayout->addWidget(new StatCard("⚠️", "POR VENCER", QString::number(proximas), "próx. 7 días", "#FBBF24"));
 
-    // Actividad reciente (últimos 5 tickets)
     clearLayout(m_activityLayout);
-    buildRecentActivity(m_activityLayout); // reconstruye el título y el card
+    buildRecentActivity(m_activityLayout);
 }
 
 void DashboardPage::buildRecentActivity(QVBoxLayout *layout) {
@@ -265,7 +263,6 @@ void DashboardPage::buildRecentActivity(QVBoxLayout *layout) {
     titleL->addWidget(verTodo);
     layout->addWidget(titleW);
 
-    // Card
     QFrame *card = new QFrame();
     card->setStyleSheet(R"(
         QFrame {
@@ -279,7 +276,6 @@ void DashboardPage::buildRecentActivity(QVBoxLayout *layout) {
     cardL->setSpacing(0);
 
     QVector<Ticket> tickets = DataManager::instance().getTickets();
-    // Ordenar por fecha descendente y tomar hasta 5
     std::sort(tickets.begin(), tickets.end(), [](const Ticket& a, const Ticket& b) {
         return a.fecha > b.fecha;
     });
