@@ -1,9 +1,13 @@
 #include "dashboardpage.h"
 #include "stylemanager.h"
 #include "datamanager.h"
+#include "admindb.h"
 #include <QGraphicsDropShadowEffect>
 #include <QPainter>
 #include <QLocale>
+#include <QSqlQuery>
+#include <QSqlError>
+#include <QFileInfo>
 
 // ─── StatCard sin borde ──────────────────────────────────────────
 StatCard::StatCard(const QString &icon, const QString &title,

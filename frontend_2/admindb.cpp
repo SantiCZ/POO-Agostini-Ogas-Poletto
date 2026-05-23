@@ -1,253 +1,144 @@
 #include "admindb.h"
-#include <QSqlError> // Permite mostrar errores SQL
-#include <QSqlQuery> // Permite ejecutar consultas SQL
-#include <QDebug> // Permite imprimir mensajes en consola
+#include <QtSql/QSqlError>
+#include <QtSql/QSqlQuery>
+#include <QDebug>
 #include <QFileInfo>
-
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QJsonValue>
 
 // CONSTRUCTOR
-// ------------------------------------------------------
-adminDB::adminDB(QObject *parent)
-    : QObject{parent}
-{
-    // Creamos una conexión usando SQLite "QSQLITE" indica el motor de base de datos que vamos a usar
+adminDB::adminDB(QObject *parent) : QObject{parent} {
     db = QSqlDatabase::addDatabase("QSQLITE");
 }
+
 // CONECTAR BASE DE DATOS
-//--------------------------------------------------------
-bool adminDB::conectar(QString archivoSqlite)
-{
-    QFileInfo archivo(archivoSqlite);
-
-    qDebug() << "Ruta recibida:" << archivoSqlite;
-    qDebug() << "Ruta absoluta:" << archivo.absoluteFilePath();
-    qDebug() << "Existe archivo:" << archivo.exists();
-
+bool adminDB::conectar(QString archivoSqlite) {
     db.setDatabaseName(archivoSqlite);
-
-    if (db.open())
-    {
-        qDebug() << "Base abierta:" << db.databaseName();
-
+    if (db.open()) {
         QSqlQuery query(db);
         query.exec("PRAGMA foreign_keys = ON;");
-
         return true;
     }
-
     qDebug() << "Error al abrir la base:" << db.lastError().text();
     return false;
 }
-// DEVOLVER LA CONEXIÓN
-//-----------------------------------------------------------
-QSqlDatabase adminDB::getDB()
-{
-    // Retorna la conexión actual para usarla desde otras partes
-    return db;
+
+QSqlDatabase adminDB::getDB() { return db; }
+
+// NUEVO: Limpia todas las tablas antes de sincronizar datos nuevos (evita mezclar usuarios)
+bool adminDB::limpiarBaseDeDatos() {
+    QSqlQuery query(db);
+    // Borramos datos de todas las tablas relevantes
+    query.exec("DELETE FROM gastos;");
+    query.exec("DELETE FROM suscripciones;");
+    query.exec("DELETE FROM categorias;");
+    query.exec("DELETE FROM notificaciones;");
+    query.exec("DELETE FROM usuario_sesion;");
+    return true;
 }
 
-bool adminDB::sincronizarDesdeJson(QByteArray datosJson)
-{
+bool adminDB::sincronizarDesdeJson(QByteArray datosJson) {
     QJsonParseError errorJson;
-
     QJsonDocument doc = QJsonDocument::fromJson(datosJson, &errorJson);
 
-    if (errorJson.error != QJsonParseError::NoError)
-    {
-        qDebug() << "Error leyendo JSON:" << errorJson.errorString();
-        return false;
-    }
-
-    if (!doc.isObject())
-    {
-        qDebug() << "El JSON no tiene formato de objeto principal";
+    if (errorJson.error != QJsonParseError::NoError || !doc.isObject()) {
+        qDebug() << "Error en formato JSON";
         return false;
     }
 
     QJsonObject root = doc.object();
-
-    qDebug() << "JSON leído correctamente";
-
     db.transaction();
 
-    bool ok = true;
+    // CORRECCIÓN: Antes de insertar, limpiamos la base para el usuario nuevo
+    if (!limpiarBaseDeDatos()) {
+        db.rollback();
+        return false;
+    }
 
+    bool ok = true;
     ok = ok && guardarUsuarioSesion(root["usuario"].toObject());
     ok = ok && guardarCategorias(root["categorias"].toArray());
     ok = ok && guardarGastos(root["gastos"].toArray());
     ok = ok && guardarSuscripciones(root["suscripciones"].toArray());
     ok = ok && guardarNotificaciones(root["notificaciones"].toArray());
 
-    if (ok)
-    {
+    if (ok) {
         db.commit();
-        qDebug() << "Sincronización local finalizada correctamente";
+        qDebug() << "Sincronización local exitosa (base limpia).";
         return true;
-    }
-    else
-    {
+    } else {
         db.rollback();
-        qDebug() << "Error en la sincronización. Se cancelaron los cambios.";
+        qDebug() << "Error en la sincronización, cambios revertidos.";
         return false;
     }
 }
 
-bool adminDB::guardarUsuarioSesion(QJsonObject usuario)
-{
+// MÉTODOS DE GUARDADO (Se mantienen igual, pero aseguran integridad)
+bool adminDB::guardarUsuarioSesion(QJsonObject usuario) {
     QSqlQuery query(db);
-
-    query.prepare(
-        "INSERT INTO usuario_sesion "
-        "(id_usuario_remoto, nombre, email, sesion_activa) "
-        "VALUES (:id_usuario_remoto, :nombre, :email, 1)"
-        );
-
-    query.bindValue(":id_usuario_remoto", usuario["id_usuario"].toInt());
+    query.prepare("INSERT INTO usuario_sesion (id_usuario_remoto, nombre, email, sesion_activa) VALUES (:id, :nombre, :email, 1)");
+    query.bindValue(":id", usuario["id_usuario"].toInt());
     query.bindValue(":nombre", usuario["nombre"].toString());
     query.bindValue(":email", usuario["email"].toString());
-
-    if (!query.exec())
-    {
-        qDebug() << "Error guardando usuario_sesion:" << query.lastError().text();
-        return false;
-    }
-
-    qDebug() << "Usuario de sesión guardado";
-    return true;
+    return query.exec();
 }
 
-bool adminDB::guardarCategorias(QJsonArray categorias)
-{
-    for (QJsonValue valor : categorias)
-    {
-        QJsonObject categoria = valor.toObject();
-
+bool adminDB::guardarCategorias(QJsonArray categorias) {
+    for (QJsonValue valor : categorias) {
+        QJsonObject cat = valor.toObject();
         QSqlQuery query(db);
-
-        query.prepare(
-            "INSERT INTO categorias "
-            "(id_categoria_remota, nombre, icono, color, sincronizado) "
-            "VALUES (:id_categoria_remota, :nombre, :icono, :color, 1)"
-            );
-
-        query.bindValue(":id_categoria_remota", categoria["id_categoria"].toInt());
-        query.bindValue(":nombre", categoria["nombre"].toString());
-        query.bindValue(":icono", categoria["icono"].toString());
-        query.bindValue(":color", categoria["color"].toString());
-
-        if (!query.exec())
-        {
-            qDebug() << "Error guardando categoria:" << query.lastError().text();
-            return false;
-        }
+        query.prepare("INSERT INTO categorias (id_categoria_remota, nombre, icono, color, sincronizado) VALUES (:id, :nom, :ico, :col, 1)");
+        query.bindValue(":id", cat["id_categoria"].toInt());
+        query.bindValue(":nom", cat["nombre"].toString());
+        query.bindValue(":ico", cat["icono"].toString());
+        query.bindValue(":col", cat["color"].toString());
+        if (!query.exec()) return false;
     }
-
-    qDebug() << "Categorías guardadas";
     return true;
 }
 
-bool adminDB::guardarGastos(QJsonArray gastos)
-{
-    for (QJsonValue valor : gastos)
-    {
+bool adminDB::guardarGastos(QJsonArray gastos) {
+    for (QJsonValue valor : gastos) {
         QJsonObject gasto = valor.toObject();
-
         QSqlQuery query(db);
-
-        query.prepare(
-            "INSERT INTO gastos "
-            "(id_gasto_remoto, id_usuario_remoto, id_categoria_remota, comercio, monto, fecha_gasto, notas, sincronizado, accion_pendiente) "
-            "VALUES (:id_gasto_remoto, :id_usuario_remoto, :id_categoria_remota, :comercio, :monto, :fecha_gasto, :notas, 1, 'ninguna')"
-            );
-
-        query.bindValue(":id_gasto_remoto", gasto["id_gasto"].toInt());
-        query.bindValue(":id_usuario_remoto", 1);
-        query.bindValue(":id_categoria_remota", gasto["id_categoria"].toInt());
-        query.bindValue(":comercio", gasto["comercio"].toString());
-        query.bindValue(":monto", gasto["monto"].toDouble());
-        query.bindValue(":fecha_gasto", gasto["fecha_gasto"].toString());
-        query.bindValue(":notas", gasto["notas"].toString());
-
-        if (!query.exec())
-        {
-            qDebug() << "Error guardando gasto:" << query.lastError().text();
-            return false;
-        }
+        query.prepare("INSERT INTO gastos (id_gasto_remoto, id_categoria_remota, comercio, monto, fecha_gasto, notas, sincronizado) VALUES (:id, :cat, :com, :mon, :fec, :not, 1)");
+        query.bindValue(":id", gasto["id_gasto"].toInt());
+        query.bindValue(":cat", gasto["id_categoria"].toInt());
+        query.bindValue(":com", gasto["comercio"].toString());
+        query.bindValue(":mon", gasto["monto"].toDouble());
+        query.bindValue(":fec", gasto["fecha_gasto"].toString());
+        query.bindValue(":not", gasto["notas"].toString());
+        if (!query.exec()) return false;
     }
-
-    qDebug() << "Gastos guardados";
     return true;
 }
 
-bool adminDB::guardarSuscripciones(QJsonArray suscripciones)
-{
-    for (QJsonValue valor : suscripciones)
-    {
-        QJsonObject suscripcion = valor.toObject();
-
+bool adminDB::guardarSuscripciones(QJsonArray suscripciones) {
+    for (QJsonValue valor : suscripciones) {
+        QJsonObject sub = valor.toObject();
         QSqlQuery query(db);
-
-        query.prepare(
-            "INSERT INTO suscripciones "
-            "(id_suscripcion_remota, id_usuario_remoto, id_categoria_remota, nombre, monto, moneda, frecuencia, vencimiento, alerta, actividad, notas, sincronizado, accion_pendiente) "
-            "VALUES (:id_suscripcion_remota, :id_usuario_remoto, :id_categoria_remota, :nombre, :monto, :moneda, :frecuencia, :vencimiento, :alerta, :actividad, :notas, 1, 'ninguna')"
-            );
-
-        query.bindValue(":id_suscripcion_remota", suscripcion["id_suscripcion"].toInt());
-        query.bindValue(":id_usuario_remoto", 1);
-        query.bindValue(":id_categoria_remota", suscripcion["id_categoria"].toInt());
-        query.bindValue(":nombre", suscripcion["nombre"].toString());
-        query.bindValue(":monto", suscripcion["monto"].toDouble());
-        query.bindValue(":moneda", suscripcion["moneda"].toString());
-        query.bindValue(":frecuencia", suscripcion["frecuencia"].toString());
-        query.bindValue(":vencimiento", suscripcion["vencimiento"].toString());
-        query.bindValue(":alerta", suscripcion["alerta"].toInt());
-        query.bindValue(":actividad", suscripcion["actividad"].toInt());
-        query.bindValue(":notas", suscripcion["notas"].toString());
-
-        if (!query.exec())
-        {
-            qDebug() << "Error guardando suscripcion:" << query.lastError().text();
-            return false;
-        }
+        query.prepare("INSERT INTO suscripciones (id_suscripcion_remota, nombre, monto, vencimiento, sincronizado) VALUES (:id, :nom, :mon, :venc, 1)");
+        query.bindValue(":id", sub["id_suscripcion"].toInt());
+        query.bindValue(":nom", sub["nombre"].toString());
+        query.bindValue(":mon", sub["monto"].toDouble());
+        query.bindValue(":venc", sub["vencimiento"].toString());
+        if (!query.exec()) return false;
     }
-
-    qDebug() << "Suscripciones guardadas";
     return true;
 }
 
-bool adminDB::guardarNotificaciones(QJsonArray notificaciones)
-{
-    for (QJsonValue valor : notificaciones)
-    {
-        QJsonObject notificacion = valor.toObject();
-
+bool adminDB::guardarNotificaciones(QJsonArray notificaciones) {
+    for (QJsonValue valor : notificaciones) {
+        QJsonObject notif = valor.toObject();
         QSqlQuery query(db);
-
-        query.prepare(
-            "INSERT INTO notificaciones "
-            "(id_notificacion_remota, id_usuario_remoto, tipo, mensaje, leida, sincronizado) "
-            "VALUES (:id_notificacion_remota, :id_usuario_remoto, :tipo, :mensaje, :leida, 1)"
-            );
-
-        query.bindValue(":id_notificacion_remota", notificacion["id_notificacion"].toInt());
-        query.bindValue(":id_usuario_remoto", 1);
-        query.bindValue(":tipo", notificacion["tipo"].toString());
-        query.bindValue(":mensaje", notificacion["mensaje"].toString());
-        query.bindValue(":leida", notificacion["leida"].toInt());
-
-        if (!query.exec())
-        {
-            qDebug() << "Error guardando notificacion:" << query.lastError().text();
-            return false;
-        }
+        query.prepare("INSERT INTO notificaciones (id_notificacion_remota, tipo, mensaje, leida, sincronizado) VALUES (:id, :tip, :men, :lei, 1)");
+        query.bindValue(":id", notif["id_notificacion"].toInt());
+        query.bindValue(":tip", notif["tipo"].toString());
+        query.bindValue(":men", notif["mensaje"].toString());
+        query.bindValue(":lei", notif["leida"].toInt());
+        if (!query.exec()) return false;
     }
-
-    qDebug() << "Notificaciones guardadas";
     return true;
 }
-

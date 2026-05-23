@@ -3,8 +3,7 @@
 
 #include <QObject>
 #include <QString>
-#include <QSqlDatabase>
-
+#include <QtSql/QSqlDatabase>
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QByteArray>
@@ -17,8 +16,10 @@ public:
     explicit adminDB(QObject *parent = nullptr);
 
     bool conectar(QString archivoSqlite);
-
     QSqlDatabase getDB();
+
+    // NUEVO: Método para vaciar las tablas antes de una sincronización
+    bool limpiarBaseDeDatos();
 
     bool sincronizarDesdeJson(QByteArray datosJson);
 
