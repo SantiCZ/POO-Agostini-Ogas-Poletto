@@ -177,8 +177,7 @@ DashboardPage::DashboardPage(QWidget *parent)
     setupUI();
     refreshData();
 
-    // NUEVO:
-    // Refresca automaticamente cuando cambian los tickets
+    // Refresca automaticamente cuando cambian los tickets o llega sync del servidor
     connect(
         &DataManager::instance(),
         &DataManager::ticketsChanged,
@@ -186,9 +185,19 @@ DashboardPage::DashboardPage(QWidget *parent)
         &DashboardPage::refreshData
         );
 
-    // CODIGO VIEJO (NO ELIMINADO)
-    // connect(&DataManager::instance(), &DataManager::dataChanged,
-    //         this, &DashboardPage::refreshData);
+    connect(
+        &DataManager::instance(),
+        &DataManager::sincronizacionCompletada,
+        this,
+        &DashboardPage::refreshData
+        );
+
+    connect(
+        &DataManager::instance(),
+        &DataManager::suscripcionesChanged,
+        this,
+        &DashboardPage::refreshData
+        );
 }
 
 void DashboardPage::setupUI()

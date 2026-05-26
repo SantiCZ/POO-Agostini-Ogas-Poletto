@@ -148,6 +148,36 @@ void Sidebar::setupUI() {
         });
     }
 
+    m_layout->addSpacing(12);
+
+    // boton subir ticket: acceso rapido desde cualquier pagina
+    QPushButton *uploadBtn = new QPushButton("📷   Subir Ticket");
+    uploadBtn->setFixedHeight(42);
+    uploadBtn->setFixedWidth(220);
+    uploadBtn->setCursor(Qt::PointingHandCursor);
+    uploadBtn->setStyleSheet(R"(
+        QPushButton {
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                stop:0 #4ADE80, stop:1 #22C55E);
+            color: #0F1117;
+            border: none;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 700;
+            text-align: left;
+            padding-left: 18px;
+        }
+        QPushButton:hover { background: #22C55E; }
+        QPushButton:pressed { background: #16A34A; }
+    )");
+    connect(uploadBtn, &QPushButton::clicked, this, [this]() {
+        // navega a tickets y abre el dialogo de subida
+        setActivePage(1);
+        emit pageChanged(1);
+        emit uploadTicketRequested();
+    });
+    m_layout->addWidget(uploadBtn);
+
     m_layout->addStretch();
 
     // ── Separador ─────────────────────────────────────────────────
@@ -239,7 +269,9 @@ void Sidebar::setupUI() {
 }
 
 void Sidebar::onProfileClicked() {
-    // Construir menú con estilo oscuro
+    // menu simplificado: solo logout
+    // las opciones de editar perfil y cambiar contrasena se sacaron
+    // porque no tienen implementacion activa todavia
     QMenu *menu = new QMenu(this);
     menu->setStyleSheet(R"(
         QMenu {
@@ -265,38 +297,19 @@ void Sidebar::onProfileClicked() {
         }
     )");
 
-    // Encabezado con nombre (no clickeable)
+    // encabezado con nombre (no clickeable)
     QAction *headerAction = new QAction(
         QString("👤  %1").arg(m_userNameLabel->text()), this
         );
     headerAction->setEnabled(false);
-    headerAction->setCheckable(false);
     menu->addAction(headerAction);
     menu->addSeparator();
 
-    // Opción: cambiar datos
-    QAction *editAction = new QAction("✏️   Cambiar datos", this);
-    connect(editAction, &QAction::triggered, this, &Sidebar::editProfileRequested);
-    menu->addAction(editAction);
-
-    // Opción: cambiar contraseña
-    QAction *passAction = new QAction("🔑   Cambiar contraseña", this);
-    connect(passAction, &QAction::triggered, this, &Sidebar::changePasswordRequested);
-    menu->addAction(passAction);
-
-    menu->addSeparator();
-
-    // Opción: cerrar sesión
+    // cerrar sesion
     QAction *logoutAction = new QAction("🚪   Cerrar sesión", this);
-    logoutAction->setCheckable(false);
-    // Color rojo para cerrar sesión
-    menu->setStyleSheet(menu->styleSheet() + R"(
-        QMenu::item[logoutItem="true"] { color: #F87171; }
-    )");
     connect(logoutAction, &QAction::triggered, this, &Sidebar::logoutRequested);
     menu->addAction(logoutAction);
 
-    // Mostrar el menú justo encima del botón de perfil
     QPoint pos = m_profileBtn->mapToGlobal(QPoint(0, -menu->sizeHint().height() - 4));
     menu->exec(pos);
 }

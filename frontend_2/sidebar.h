@@ -28,8 +28,12 @@ public:
 signals:
     void pageChanged(int index);
     void logoutRequested();
-    void editProfileRequested();
-    void changePasswordRequested();
+    // nuevo: emitido cuando el usuario toca el boton rapido de subir ticket
+    void uploadTicketRequested();
+
+    // senales conservadas por compatibilidad pero sin uso activo todavia
+    // void editProfileRequested();
+    // void changePasswordRequested();
 
 public slots:
     void setActivePage(int index);
@@ -46,14 +50,12 @@ private:
     QVector<SidebarButton*>  m_navButtons;
     int                      m_activeIndex     = 0;
 
-    // Perfil clickeable
     QPushButton             *m_profileBtn      = nullptr;
     QLabel                  *m_userNameLabel   = nullptr;
     QLabel                  *m_userEmailLabel  = nullptr;
 
-    // Sincronización
     QLabel                  *m_syncIcon        = nullptr;
 
-    // Mantenido por compatibilidad con código existente que use m_logoutBtn
+    // mantenido por compatibilidad
     QPushButton             *m_logoutBtn       = nullptr;
 };

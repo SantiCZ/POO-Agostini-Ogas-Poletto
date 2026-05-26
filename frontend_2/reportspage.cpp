@@ -121,6 +121,15 @@ void BarChart::paintEvent(QPaintEvent *) {
 
 ReportsPage::ReportsPage(QWidget *parent) : QWidget(parent) {
     setStyleSheet("background: transparent;");
+
+    // Conectar ANTES de setupUI/refreshData para no perderse ninguna señal
+    connect(&DataManager::instance(), &DataManager::sincronizacionCompletada,
+            this, &ReportsPage::refreshData);
+    connect(&DataManager::instance(), &DataManager::ticketsChanged,
+            this, &ReportsPage::refreshData);
+    connect(&DataManager::instance(), &DataManager::suscripcionesChanged,
+            this, &ReportsPage::refreshData);
+
     setupUI();
     refreshData();
 }
@@ -229,10 +238,29 @@ void ReportsPage::refreshData() {
     QDate now = QDate::currentDate();
     int year  = now.year();
     int month = now.month();
-    double gastoMes         = DataManager::instance().getGastoMes(year, month);
-    double gastoMesAnterior = DataManager::instance().getGastoMes(year, month - 1);
-    int    ticketCount      = DataManager::instance().getTicketCountMes(year, month);
-    double promedio         = (ticketCount > 0) ? gastoMes / ticketCount : 0;
+
+    // Mismo método que DashboardPage: iterar getTickets() para garantizar
+    // que ambas páginas muestren exactamente los mismos totales
+    QVector<Ticket> tickets = DataManager::instance().getTickets();
+
+    double gastoMes = 0.0;
+    int    ticketCount = 0;
+    double gastoMesAnterior = 0.0;
+
+    int prevYear  = (month == 1) ? year - 1 : year;
+    int prevMonth = (month == 1) ? 12 : month - 1;
+
+    for (const Ticket &t : tickets) {
+        if (t.fecha.year() == year && t.fecha.month() == month) {
+            gastoMes += t.monto;
+            ticketCount++;
+        }
+        if (t.fecha.year() == prevYear && t.fecha.month() == prevMonth) {
+            gastoMesAnterior += t.monto;
+        }
+    }
+
+    double promedio = (ticketCount > 0) ? gastoMes / ticketCount : 0;
 
     // ── Summary cards (sin bordes) ────────────────────────────────
     struct Card { QString icon, label, val, sub, color; };
@@ -270,8 +298,18 @@ void ReportsPage::refreshData() {
         m_summaryLayout->addWidget(card);
     }
 
-    // ── Bar chart ─────────────────────────────────────────────────
-    auto semanas = DataManager::instance().getGastosPorSemana(year, month);
+    // ── Bar chart — calculado desde los tickets ya cargados ───────
+    QMap<int, double> semanasMap;
+    for (const Ticket &t : tickets) {
+        if (t.fecha.year() == year && t.fecha.month() == month) {
+            int semana = ((t.fecha.day() - 1) / 7) + 1;
+            semanasMap[semana] += t.monto;
+        }
+    }
+    QVector<QPair<QString,double>> semanas;
+    for (auto it = semanasMap.begin(); it != semanasMap.end(); ++it)
+        semanas.append(qMakePair(QString("Semana %1").arg(it.key()), it.value()));
+
     double maxSem = 0;
     for (auto &p : semanas) if (p.second > maxSem) maxSem = p.second;
     maxSem = qMax(maxSem, 1.0);
@@ -306,7 +344,17 @@ void ReportsPage::refreshData() {
     breakCardL->setContentsMargins(16, 16, 16, 16);
     breakCardL->setSpacing(6);
 
-    auto cats = DataManager::instance().getGastosPorCategoria(year, month);
+    // ── Category breakdown — calculado desde los tickets ya cargados ─
+    QMap<QString, double> catsMap;
+    for (const Ticket &t : tickets) {
+        if (t.fecha.year() == year && t.fecha.month() == month) {
+            catsMap[t.categoria.isEmpty() ? "Otro" : t.categoria] += t.monto;
+        }
+    }
+    QVector<QPair<QString,double>> cats;
+    for (auto it = catsMap.begin(); it != catsMap.end(); ++it)
+        cats.append(qMakePair(it.key(), it.value()));
+
     double maxCat = 0;
     for (auto &p : cats) if (p.second > maxCat) maxCat = p.second;
     maxCat = qMax(maxCat, 1.0);
@@ -344,4 +392,27 @@ void ReportsPage::refreshData() {
 
     m_breakdownLayout->addWidget(breakCard);
     m_breakdownLayout->addStretch();
+}
+// ─────────────────────────────────────────
+// metodos declarados en el .h pero que refreshData() ya implementa inline.
+// se definen vacios para que el linker no falle.
+// todo el trabajo real lo hace refreshData() directamente.
+// ─────────────────────────────────────────
+
+void ReportsPage::buildSummaryCards(QHBoxLayout *layout)
+{
+    Q_UNUSED(layout);
+    // implementacion inline en refreshData()
+}
+
+void ReportsPage::buildBarChart(QVBoxLayout *layout)
+{
+    Q_UNUSED(layout);
+    // implementacion inline en refreshData()
+}
+
+void ReportsPage::buildCategoryBreakdown(QVBoxLayout *layout)
+{
+    Q_UNUSED(layout);
+    // implementacion inline en refreshData()
 }

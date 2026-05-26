@@ -41,6 +41,13 @@ void MainWidget::setupUI() {
     m_sidebar = new Sidebar(this);
     connect(m_sidebar, &Sidebar::logoutRequested, this, &MainWidget::onLogout);
 
+    // nuevo: el boton rapido de subir ticket en el sidebar navega a tickets y abre el dialogo
+    connect(m_sidebar, &Sidebar::uploadTicketRequested, this, [this]() {
+        m_sidebar->setActivePage(1);
+        m_stack->setCurrentIndex(1);
+        m_tickets->onUploadClicked();
+    });
+
     QWidget *contentArea = new QWidget();
     contentArea->setStyleSheet("background-color: #0F1117;");
 
@@ -66,6 +73,10 @@ void MainWidget::setupUI() {
         m_stack->setCurrentIndex(idx);
         refreshAllPages();
     });
+
+    // Refrescar todas las páginas cuando el servidor complete la sincronización
+    connect(&DataManager::instance(), &DataManager::sincronizacionCompletada,
+            this, &MainWidget::refreshAllPages);
 
     connect(m_dashboard, &DashboardPage::navigateToTickets, this, [this]() {
         m_sidebar->setActivePage(1);

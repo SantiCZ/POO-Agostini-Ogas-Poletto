@@ -5,6 +5,7 @@ QString StyleManager::appStyleSheet() {
         QMainWindow, QDialog {
             background-color: #0F1117;
             color: #F1F5F9;
+            border: none;
         }
         QWidget {
             background-color: transparent;
@@ -42,6 +43,7 @@ QString StyleManager::appStyleSheet() {
         }
         QFrame {
             border: none;
+            outline: none;
         }
         QToolTip {
             background-color: #21253A;
