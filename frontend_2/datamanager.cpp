@@ -283,11 +283,17 @@ void DataManager::onRespuestaRecibida(
     // ─── GUARDAR SUSCRIPCION ─────────────────────
     else if (path.contains("/suscripciones/guardar"))
     {
-        QJsonObject root =
-            QJsonDocument::fromJson(responseData).object();
+        QJsonObject root = QJsonDocument::fromJson(responseData).object();
 
         qDebug() << "RESPUESTA SUSCRIPCION:";
         qDebug() << root;
+
+        // --- CORRECCIÓN: Sincronizar después de guardar ---
+        int idUsuario = getUsuarioActivoId();
+        if (idUsuario > 0) {
+            sincronizarDesdeServidor(idUsuario);
+        }
+        // --------------------------------------------------
 
         cambiarEstadoRed(EXITO);
     }
@@ -547,15 +553,49 @@ bool DataManager::addTicket(const Ticket& t)
         return false;
     }
 
-    QJsonObject json;
-    json["id_usuario"]   = usuarioId;
-    json["comercio"]     = t.nombreLocal;
-    json["monto"]        = t.monto;
-    json["fecha_gasto"]  = t.fecha.toString(Qt::ISODate);
-    json["id_categoria"] = 1;
-    json["notas"]        = "";
+    // --- ARMADO DEL JSON PARA EL VPS ---
+    QJsonObject jsonRaiz;
+    jsonRaiz.insert("id_usuario", usuarioId);
 
-    guardarTicketCompletoServidor(json);
+    // 1. Creamos el sub-objeto "gasto"
+    QJsonObject gastoObj;
+    gastoObj.insert("comercio", t.nombreLocal);
+    gastoObj.insert("monto", t.monto);
+    gastoObj.insert("fecha_gasto", t.fecha.toString(Qt::ISODate));
+    gastoObj.insert("categoria_sugerida", t.categoria);
+    gastoObj.insert("notas", "Generado localmente");
+
+    // Lo metemos en la raíz
+    jsonRaiz.insert("gasto", gastoObj);
+
+    // 2. Creamos el sub-objeto "comprobante"
+    QJsonObject compObj;
+    if (t.imagenPath.isEmpty()) {
+        compObj.insert("ruta_archivo", "carga_manual");
+    } else {
+        compObj.insert("ruta_archivo", t.imagenPath);
+    }
+    compObj.insert("estado", "procesado");
+
+    // Lo metemos en la raíz
+    jsonRaiz.insert("comprobante", compObj);
+
+    // 3. NUEVO: ARMAMOS EL ARREGLO DE ITEMS PARA EL VPS
+    if (!t.items.isEmpty()) {
+        QJsonArray itemsArray;
+        for (const ItemTicket& item : t.items) {
+            QJsonObject itemJson;
+            itemJson.insert("descripcion", item.nombre);
+            itemJson.insert("cantidad", item.cantidad);
+            itemJson.insert("precio_unitario", item.precioUnitario);
+            itemJson.insert("subtotal", item.cantidad * item.precioUnitario);
+            itemsArray.append(itemJson);
+        }
+        jsonRaiz.insert("items_gasto", itemsArray);
+    }
+
+    // Enviamos al servidor
+    guardarTicketCompletoServidor(jsonRaiz);
 
     emit ticketsChanged();
     return true;
@@ -652,33 +692,13 @@ bool DataManager::addSuscripcion(const Suscripcion& s)
         return false;
     }
 
-    QSqlQuery query(m_db.getDB());
+    // ELIMINAMOS EL INSERT EN SQLITE LOCAL.
+    // Solo enviamos la suscripción al servidor. El VPS se encargará
+    // de guardarla, y el próximo `/sync` (que disparamos en onRespuestaRecibida)
+    // la bajará a nuestra base local, evitando duplicados.
 
-    query.prepare(R"(
-        INSERT INTO suscripciones
-        (id_usuario, nombre, monto, vencimiento, alerta, actividad)
-        VALUES (:uid, :nombre, :monto, :vencimiento, :alerta, :actividad)
-    )");
-
-    query.bindValue(":uid",         usuarioId);
-    query.bindValue(":nombre",      s.nombreServicio);
-    query.bindValue(":monto",       s.monto);
-    query.bindValue(":vencimiento", s.fechaVencimiento.toString(Qt::ISODate));
-    query.bindValue(":alerta",      s.diasAviso);
-    query.bindValue(":actividad",   s.activa ? 1 : 0);
-
-    if (!query.exec())
-    {
-        qDebug() << "Error insertando suscripcion:" << query.lastError().text();
-        return false;
-    }
-
-    // CORREGIDO: envio al VPS centralizado acá.
-    // La UI (AddSubscriptionDialog::accept) solo llama addSuscripcion()
-    // y no debe llamar guardarSuscripcionRed() directamente.
     guardarSuscripcionRed(s);
 
-    emit suscripcionesChanged();
     return true;
 }
 

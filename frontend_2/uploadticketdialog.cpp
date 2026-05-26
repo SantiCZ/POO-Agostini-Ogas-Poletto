@@ -320,18 +320,36 @@ void UploadTicketDialog::accept()
         return;
     }
 
-    // CORREGIDO: addTicket() centraliza todo:
-    //   - INSERT en SQLite local
-    //   - envio al VPS via guardarTicketCompletoServidor()
-    //   - emit ticketsChanged()
-    // No hay que hacer ninguna de esas cosas por separado acá.
     Ticket t;
     t.nombreLocal    = m_localEdit->text();
     t.monto          = m_montoSpin->value();
     t.fecha          = m_fechaEdit->date();
     t.categoria      = m_catCombo->currentText();
-    t.imagenPath     = m_imagenPath;
     t.procesadoPorIA = !m_iaJsonResult.isEmpty();
+
+    // --- CORRECCIÓN: RUTAS DE LAS FOTOS ---
+    if (t.procesadoPorIA && m_iaJsonResult.contains("comprobante")) {
+        QJsonObject comp = m_iaJsonResult["comprobante"].toObject();
+        t.imagenPath = comp["ruta_archivo"].toString();
+    } else {
+        t.imagenPath = "";
+    }
+    // --------------------------------------
+
+    // --- NUEVO: TRADUCIMOS LOS ITEMS DE LA IA A C++ ---
+    if (t.procesadoPorIA && m_iaJsonResult.contains("items_gasto")) {
+        QJsonArray itemsArray = m_iaJsonResult["items_gasto"].toArray();
+        for (int i = 0; i < itemsArray.size(); ++i) {
+            QJsonObject itemObj = itemsArray[i].toObject();
+            ItemTicket item;
+            // Usamos las claves que manda la IA
+            item.nombre = itemObj["descripcion"].toString();
+            item.cantidad = itemObj["cantidad"].toDouble(1.0);
+            item.precioUnitario = itemObj["precio_unitario"].toDouble(0.0);
+            t.items.append(item);
+        }
+    }
+    // --------------------------------------------------
 
     if (!DataManager::instance().addTicket(t)) {
         QMessageBox::warning(this, "Error", "No se pudo guardar el ticket.");

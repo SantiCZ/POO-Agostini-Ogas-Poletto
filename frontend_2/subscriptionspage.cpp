@@ -622,40 +622,8 @@ void SubscriptionsPage::onAddClicked()
 {
     AddSubscriptionDialog dlg(this);
 
-    if (
-        dlg.exec()
-        == QDialog::Accepted
-        )
-    {
-        Suscripcion s;
-
-        s.id = 0;
-
-        s.nombreServicio =
-            dlg.nombreServicio().isEmpty()
-                ? "Sin nombre"
-                : dlg.nombreServicio();
-
-        s.monto =
-            dlg.monto();
-
-        s.fechaVencimiento =
-            dlg.fechaVencimiento();
-
-        s.diasAviso =
-            dlg.diasAviso();
-
-        s.categoria =
-            dlg.categoria();
-
-        s.iconoNombre =
-            dlg.iconoNombre();
-
-        s.activa = true;
-
-        DataManager::instance()
-            .guardarSuscripcionRed(s);
-
-        refreshData();
-    }
+    // Solo abrimos la ventana.
+    // El botón "Guardar" de esa ventana ya se encarga de enviar
+    // la suscripción al servidor. No tenemos que hacer nada más acá.
+    dlg.exec();
 }
