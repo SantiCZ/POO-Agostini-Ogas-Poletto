@@ -1,6 +1,6 @@
 #include "addsubscriptiondialog.h"
 #include "models.h"
-#include "datamanager.h" // NUEVO: Para poder guardar los datos
+#include "datamanager.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -20,7 +20,6 @@ void AddSubscriptionDialog::setupUI() {
     mainL->setContentsMargins(28, 24, 28, 24);
     mainL->setSpacing(20);
 
-    // Título
     QLabel *title = new QLabel("🔄  Nueva Suscripción");
     title->setStyleSheet("color: #F1F5F9; font-size: 20px; font-weight: 700; background: transparent;");
     QLabel *sub = new QLabel("Registrá un servicio recurrente y recibí recordatorios");
@@ -63,7 +62,6 @@ void AddSubscriptionDialog::setupUI() {
         return l;
     };
 
-    // Formulario
     QWidget *formW = new QWidget();
     formW->setStyleSheet("background: transparent;");
     QGridLayout *formL = new QGridLayout(formW);
@@ -109,7 +107,6 @@ void AddSubscriptionDialog::setupUI() {
 
     mainL->addWidget(formW);
 
-    // Info aviso
     QFrame *infoCard = new QFrame();
     infoCard->setStyleSheet(R"(
         QFrame {
@@ -128,7 +125,6 @@ void AddSubscriptionDialog::setupUI() {
 
     mainL->addStretch();
 
-    // Botones
     QWidget *btnW = new QWidget();
     btnW->setStyleSheet("background: transparent;");
     QHBoxLayout *btnL = new QHBoxLayout(btnW);
@@ -151,7 +147,6 @@ void AddSubscriptionDialog::setupUI() {
         QPushButton { background-color: #38BDF8; color: #0F1117; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; }
         QPushButton:hover { background-color: #0EA5E9; }
     )");
-    // Aquí el botón saveBtn llamará al método accept() que programamos abajo
     connect(m_saveBtn, &QPushButton::clicked, this, &AddSubscriptionDialog::accept);
 
     btnL->addWidget(m_cancelBtn, 1);
@@ -159,35 +154,38 @@ void AddSubscriptionDialog::setupUI() {
     mainL->addWidget(btnW);
 }
 
-// ──────────────────────────────────────────────────────────────
-// NUEVO: Método accept para enviar los datos a la DB y al JSON
-// ──────────────────────────────────────────────────────────────
-void AddSubscriptionDialog::accept() {
-    // Validamos que no se guarde una suscripción sin nombre
+void AddSubscriptionDialog::accept()
+{
     if (m_nombreEdit->text().trimmed().isEmpty()) {
         QMessageBox::warning(this, "Atención", "Por favor ingresá el nombre del servicio.");
         m_nombreEdit->setFocus();
         return;
     }
 
-    // 1. Armamos el objeto con los datos de la interfaz
     Suscripcion s;
+    s.id             = 0;
     s.nombreServicio = m_nombreEdit->text().trimmed();
-    s.monto = m_montoSpin->value();
-    s.categoria = m_catCombo->currentText();
+    s.monto          = m_montoSpin->value();
+    s.categoria      = m_catCombo->currentText();
     s.fechaVencimiento = m_fechaEdit->date();
-    s.diasAviso = m_diasSpin->value();
-    s.activa = true;
-    s.iconoNombre = s.nombreServicio.toLower().simplified();
+    s.diasAviso      = m_diasSpin->value();
+    s.activa         = true;
+    s.iconoNombre    = s.nombreServicio.toLower().simplified();
 
-    // 2. Lo mandamos al VPS para que se guarde en MySQL
-    DataManager::instance().guardarSuscripcionRed(s);
+    // CORREGIDO: addSuscripcion() centraliza todo:
+    //   - INSERT en SQLite local
+    //   - envio al VPS via guardarSuscripcionRed()
+    //   - emit suscripcionesChanged()
+    // No llamar guardarSuscripcionRed() acá por separado.
+    if (!DataManager::instance().addSuscripcion(s)) {
+        QMessageBox::critical(this, "Error", "No se pudo guardar la suscripción.");
+        return;
+    }
 
-    // Cerramos la ventana
-    QDialog::accept();
+    QDialog::accept(); // llamado UNA sola vez
 }
 
-QString AddSubscriptionDialog::nombreServicio() const { return m_nombreEdit->text(); }
+QString AddSubscriptionDialog::nombreServicio()  const { return m_nombreEdit->text(); }
 double  AddSubscriptionDialog::monto()           const { return m_montoSpin->value(); }
 QDate   AddSubscriptionDialog::fechaVencimiento() const { return m_fechaEdit->date(); }
 int     AddSubscriptionDialog::diasAviso()        const { return m_diasSpin->value(); }

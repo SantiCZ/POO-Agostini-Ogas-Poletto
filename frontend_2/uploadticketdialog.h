@@ -1,4 +1,5 @@
 #pragma once
+
 #include <QDialog>
 #include <QLabel>
 #include <QLineEdit>
@@ -12,20 +13,31 @@
 
 class UploadTicketDialog : public QDialog {
     Q_OBJECT
+
 public:
     explicit UploadTicketDialog(QWidget *parent = nullptr);
 
-    void accept() override; // Redefinido para impactar en la base de datos
+    // Ahora guarda directamente usando DataManager + SQLite
+    void accept() override;
 
-    QString     imagenPath() const;
-    QString     nombreLocal() const;
-    double      monto() const;
-    QDate       fecha() const;
-    QString     categoria() const;
+    QString imagenPath() const;
+    QString nombreLocal() const;
+    double monto() const;
+    QDate fecha() const;
+    QString categoria() const;
 
 private slots:
     void onSelectImage();
     void onAnalyzeIA();
+
+    // NUEVO
+    void onTicketProcesadoIA(const QString &comercio,
+                             double monto,
+                             const QString &fecha,
+                             const QString &categoria,
+                             const QJsonObject &jsonCompleto);
+
+    void onErrorRed(const QString &mensaje);
 
 private:
     void setupUI();
@@ -34,17 +46,27 @@ private:
     QLabel         *m_dropIcon      = nullptr;
     QLabel         *m_dropLabel     = nullptr;
     QLabel         *m_dropSub       = nullptr;
+
     QFrame         *m_dropZone      = nullptr;
+
     QPushButton    *m_selectBtn     = nullptr;
     QPushButton    *m_analyzeBtn    = nullptr;
+
     QLineEdit      *m_localEdit     = nullptr;
+
     QDoubleSpinBox *m_montoSpin     = nullptr;
+
     QDateEdit      *m_fechaEdit     = nullptr;
+
     QComboBox      *m_catCombo      = nullptr;
+
     QPushButton    *m_saveBtn       = nullptr;
     QPushButton    *m_cancelBtn     = nullptr;
+
     QLabel         *m_statusLabel   = nullptr;
 
     QString     m_imagenPath;
-    QJsonObject m_iaJsonResult; // Guarda la respuesta nativa del servidor GPT
+
+    // Guarda respuesta completa del VPS
+    QJsonObject m_iaJsonResult;
 };

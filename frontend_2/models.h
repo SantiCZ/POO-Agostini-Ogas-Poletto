@@ -1,48 +1,93 @@
 #pragma once
+
 #include <QString>
 #include <QDate>
 #include <QList>
+#include <QStringList>
 
-// ─── Movimiento base ───────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// Movimiento base
+// ─────────────────────────────────────────────
+
 struct MovimientoBase {
-    int     id;
-    double  monto;
+    int     id = -1;
+    double  monto = 0;
     QDate   fecha;
     QString categoria;
     QString descripcion;
 };
 
-// ─── Ítem de ticket ───────────────────────────────────────────────
-struct ItemTicket {
+// ─────────────────────────────────────────────
+// Ítem de ticket
+// ─────────────────────────────────────────────
+
+struct ItemTicket
+{
     QString nombre;
-    int     cantidad;
-    double  precioUnitario;
+
+    int cantidad = 0;
+
+    double precioUnitario = 0.0;
 };
 
-// ─── Ticket (hereda conceptualmente de MovimientoBase) ────────────
-struct Ticket : public MovimientoBase {
-    QString         nombreLocal;
+// ─────────────────────────────────────────────
+// Ticket
+// ─────────────────────────────────────────────
+
+struct Ticket : public MovimientoBase
+{
+    QString nombreLocal;
+
     QList<ItemTicket> items;
-    QString         imagenPath;
-    bool            procesadoPorIA;
+
+    QString imagenPath;
+
+    bool procesadoPorIA = false;
 };
 
-// ─── Suscripción ──────────────────────────────────────────────────
-struct Suscripcion : public MovimientoBase {
+// ─────────────────────────────────────────────
+// Suscripción
+// ─────────────────────────────────────────────
+
+struct Suscripcion : public MovimientoBase
+{
     QString nombreServicio;
-    QDate   fechaVencimiento;
-    int     diasAviso;          // avisar X días antes
-    bool    activa;
-    QString iconoNombre;        // ej: "netflix", "spotify"
+
+    QDate fechaVencimiento;
+
+    int diasAviso = 0;
+
+    bool activa = true;
+
+    QString iconoNombre;
 };
 
-// ─── Categorías predefinidas ──────────────────────────────────────
-static const QStringList CATEGORIAS = {
-    "Supermercado", "Restaurante", "Transporte", "Salud",
-    "Entretenimiento", "Servicios", "Ropa", "Tecnología", "Otro"
-};
-struct User {
-    int id;
+// ─────────────────────────────────────────────
+// Usuario
+// ─────────────────────────────────────────────
+
+struct User
+{
+    int id = -1;
+
     QString username;
+
     QString passwordHash;
+};
+
+// ─────────────────────────────────────────────
+// Categorías
+// ─────────────────────────────────────────────
+
+static const QStringList CATEGORIAS =
+    {
+        "Supermercado",
+        "Restaurante",
+        "Transporte",
+        "Salud",
+        "Entretenimiento",
+        "Servicios",
+        "Ropa",
+        "Tecnología",
+        "Otro"
 };

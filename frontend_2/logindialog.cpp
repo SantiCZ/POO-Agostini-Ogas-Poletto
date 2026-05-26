@@ -1,12 +1,14 @@
 #include "logindialog.h"
 #include "datamanager.h"
+
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFrame>
 #include <QRegularExpression>
+#include <QMessageBox>
 
 // ─────────────────────────────────────────────────────────────────
-// Helpers de estilo (igual que antes)
+// Helpers de estilo
 // ─────────────────────────────────────────────────────────────────
 static QString inputStyle() {
     return R"(
@@ -50,7 +52,10 @@ static QString ghostBtnStyle() {
             padding: 9px;
             font-size: 13px;
         }
-        QPushButton:hover { color: #94A3B8; border-color: #475569; }
+        QPushButton:hover {
+            color: #94A3B8;
+            border-color: #475569;
+        }
     )";
 }
 
@@ -71,25 +76,22 @@ static QString linkBtnStyle(const QString &color = "#4ADE80") {
 // ─────────────────────────────────────────────────────────────────
 // Constructor
 // ─────────────────────────────────────────────────────────────────
-LoginDialog::LoginDialog(QWidget *parent) : QDialog(parent) {
+LoginDialog::LoginDialog(QWidget *parent)
+    : QDialog(parent)
+{
     setWindowTitle("AlcancIA");
     setModal(true);
     setFixedSize(400, 480);
     setStyleSheet(R"(
-        QDialog {
-            background-color: #0F1117;
-            border: 1px solid #2E3347;
-            border-radius: 16px;
-        }
-        QLabel { background: transparent; }
+        QDialog { background-color: #0F1117; border: 1px solid #2E3347; border-radius: 16px; }
+        QLabel  { background: transparent; }
     )");
 
     m_stack = new QStackedWidget(this);
     buildLoginPanel();
     buildRegisterPanel();
-
-    m_stack->addWidget(m_loginWidget);     // índice 0
-    m_stack->addWidget(m_registerWidget);  // índice 1
+    m_stack->addWidget(m_loginWidget);
+    m_stack->addWidget(m_registerWidget);
 
     QVBoxLayout *root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -97,14 +99,61 @@ LoginDialog::LoginDialog(QWidget *parent) : QDialog(parent) {
 
     showLoginPanel();
 
-    // NUEVO: Conectamos la ventana con la respuesta del servidor VPS
-    connect(&DataManager::instance(), &DataManager::usuarioRegistradoServidor, this, &LoginDialog::onRegistroRespuesta);
+    // nuevo: conectamos las señales del login real contra el vps
+    // antes se usaba DataManager::login() local que siempre fallaba
+    // si sqlite no tenia datos todavia
+    connect(&DataManager::instance(),
+            &DataManager::loginExitoso,
+            this,
+            &LoginDialog::onLoginExitoso);
+
+    connect(&DataManager::instance(),
+            &DataManager::loginFallido,
+            this,
+            [this](const QString& mensaje) {
+                m_loginBtn->setEnabled(true);
+                m_loginBtn->setText("Ingresar");
+                m_errorLabel->setText(
+                    mensaje.isEmpty()
+                        ? "Usuario o contraseña incorrectos."
+                        : mensaje
+                    );
+                m_errorLabel->show();
+                m_passEdit->clear();
+                m_passEdit->setFocus();
+            });
+
+    connect(&DataManager::instance(),
+            &DataManager::usuarioRegistradoServidor,
+            this,
+            &LoginDialog::onRegistroRespuesta);
+
+    connect(&DataManager::instance(),
+            &DataManager::errorDeRed,
+            this,
+            [this](const QString& mensaje) {
+                // error durante registro
+                if (m_stack->currentIndex() == 1) {
+                    m_registerBtn->setEnabled(true);
+                    m_registerBtn->setText("Crear cuenta");
+                    m_regErrorLabel->setText(mensaje);
+                    m_regErrorLabel->show();
+                }
+                // error durante login
+                else {
+                    m_loginBtn->setEnabled(true);
+                    m_loginBtn->setText("Ingresar");
+                    m_errorLabel->setText("Error de conexion: " + mensaje);
+                    m_errorLabel->show();
+                }
+            });
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Panel LOGIN
+// LOGIN PANEL
 // ─────────────────────────────────────────────────────────────────
-void LoginDialog::buildLoginPanel() {
+void LoginDialog::buildLoginPanel()
+{
     m_loginWidget = new QWidget();
     m_loginWidget->setStyleSheet("background: transparent;");
 
@@ -112,14 +161,13 @@ void LoginDialog::buildLoginPanel() {
     mainL->setContentsMargins(36, 36, 36, 36);
     mainL->setSpacing(14);
 
-    // Logo
     QLabel *logo = new QLabel("🏦");
     logo->setAlignment(Qt::AlignCenter);
     logo->setStyleSheet("font-size: 40px;");
 
     QLabel *appName = new QLabel("AlcancIA");
     appName->setAlignment(Qt::AlignCenter);
-    appName->setStyleSheet("color: #F1F5F9; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;");
+    appName->setStyleSheet("color: #F1F5F9; font-size: 24px; font-weight: 800;");
 
     QLabel *tagline = new QLabel("Tu asistente financiero inteligente");
     tagline->setAlignment(Qt::AlignCenter);
@@ -130,45 +178,44 @@ void LoginDialog::buildLoginPanel() {
     mainL->addWidget(tagline);
     mainL->addSpacing(8);
 
-    // Separador
     QFrame *sep = new QFrame();
     sep->setFrameShape(QFrame::HLine);
     sep->setStyleSheet("background: #2E3347; border: none; max-height: 1px;");
     mainL->addWidget(sep);
     mainL->addSpacing(4);
 
-    // Campos
-    QLabel *userLabel = new QLabel("Usuario");
-    userLabel->setStyleSheet("color: #64748B; font-size: 11px; font-weight: 600; letter-spacing: 0.5px;");
+    // nuevo: el login usa email, no usuario, para coincidir con el vps
+    QLabel *emailLabel = new QLabel("Email");
+    emailLabel->setStyleSheet("color: #64748B; font-size: 11px; font-weight: 600;");
 
     m_userEdit = new QLineEdit();
-    m_userEdit->setPlaceholderText("Ingresá tu usuario");
+    m_userEdit->setPlaceholderText("tu@email.com");
     m_userEdit->setStyleSheet(inputStyle());
     m_userEdit->setFixedHeight(42);
 
     QLabel *passLabel = new QLabel("Contraseña");
-    passLabel->setStyleSheet("color: #64748B; font-size: 11px; font-weight: 600; letter-spacing: 0.5px;");
+    passLabel->setStyleSheet("color: #64748B; font-size: 11px; font-weight: 600;");
 
     m_passEdit = new QLineEdit();
-    m_passEdit->setPlaceholderText("Ingresá tu contraseña");
+    m_passEdit->setPlaceholderText("Ingresa tu contraseña");
     m_passEdit->setEchoMode(QLineEdit::Password);
     m_passEdit->setStyleSheet(inputStyle());
     m_passEdit->setFixedHeight(42);
-    connect(m_passEdit, &QLineEdit::returnPressed, this, &LoginDialog::onLogin);
+
+    connect(m_passEdit, &QLineEdit::returnPressed,
+            this, &LoginDialog::onLogin);
 
     m_errorLabel = new QLabel();
     m_errorLabel->setStyleSheet("color: #F87171; font-size: 12px;");
     m_errorLabel->setAlignment(Qt::AlignCenter);
     m_errorLabel->hide();
 
-    mainL->addWidget(userLabel);
+    mainL->addWidget(emailLabel);
     mainL->addWidget(m_userEdit);
     mainL->addWidget(passLabel);
     mainL->addWidget(m_passEdit);
     mainL->addWidget(m_errorLabel);
-    mainL->addSpacing(4);
 
-    // Botones
     m_loginBtn = new QPushButton("Ingresar");
     m_loginBtn->setFixedHeight(44);
     m_loginBtn->setCursor(Qt::PointingHandCursor);
@@ -185,33 +232,31 @@ void LoginDialog::buildLoginPanel() {
     mainL->addWidget(m_cancelBtn);
     mainL->addStretch();
 
-    // Link a registro
     QWidget *regRow = new QWidget();
     regRow->setStyleSheet("background: transparent;");
     QHBoxLayout *regL = new QHBoxLayout(regRow);
-    regL->setContentsMargins(0, 0, 0, 0);
-    regL->setSpacing(4);
+    regL->setContentsMargins(0,0,0,0);
 
     QLabel *regTxt = new QLabel("¿No tenés cuenta?");
     regTxt->setStyleSheet("color: #475569; font-size: 12px;");
 
     QPushButton *regLink = new QPushButton("Crear una ahora");
     regLink->setCursor(Qt::PointingHandCursor);
-    regLink->setStyleSheet(linkBtnStyle("#4ADE80"));
+    regLink->setStyleSheet(linkBtnStyle());
     connect(regLink, &QPushButton::clicked, this, &LoginDialog::showRegisterPanel);
 
     regL->addStretch();
     regL->addWidget(regTxt);
     regL->addWidget(regLink);
     regL->addStretch();
-
     mainL->addWidget(regRow);
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Panel REGISTRO
+// REGISTER PANEL
 // ─────────────────────────────────────────────────────────────────
-void LoginDialog::buildRegisterPanel() {
+void LoginDialog::buildRegisterPanel()
+{
     m_registerWidget = new QWidget();
     m_registerWidget->setStyleSheet("background: transparent;");
 
@@ -219,40 +264,36 @@ void LoginDialog::buildRegisterPanel() {
     mainL->setContentsMargins(36, 32, 36, 32);
     mainL->setSpacing(12);
 
-    // Header con botón volver
     QWidget *headerW = new QWidget();
     headerW->setStyleSheet("background: transparent;");
     QHBoxLayout *headerL = new QHBoxLayout(headerW);
-    headerL->setContentsMargins(0, 0, 0, 0);
+    headerL->setContentsMargins(0,0,0,0);
 
     m_backBtn = new QPushButton("← Volver");
     m_backBtn->setCursor(Qt::PointingHandCursor);
     m_backBtn->setStyleSheet(linkBtnStyle("#64748B"));
     connect(m_backBtn, &QPushButton::clicked, this, &LoginDialog::showLoginPanel);
-
     headerL->addWidget(m_backBtn);
     headerL->addStretch();
 
-    QLabel *regTitle = new QLabel("Crear cuenta");
-    regTitle->setStyleSheet("color: #F1F5F9; font-size: 20px; font-weight: 700;");
+    QLabel *title = new QLabel("Crear cuenta");
+    title->setStyleSheet("color: #F1F5F9; font-size: 20px; font-weight: 700;");
 
-    QLabel *regSub = new QLabel("Completá tus datos para registrarte");
-    regSub->setStyleSheet("color: #64748B; font-size: 12px;");
+    QLabel *sub = new QLabel("Completá tus datos para registrarte");
+    sub->setStyleSheet("color: #64748B; font-size: 12px;");
 
     mainL->addWidget(headerW);
-    mainL->addWidget(regTitle);
-    mainL->addWidget(regSub);
-    mainL->addSpacing(4);
+    mainL->addWidget(title);
+    mainL->addWidget(sub);
 
-    // Campos
-    auto makeLabel = [](const QString &txt) {
-        QLabel *l = new QLabel(txt);
-        l->setStyleSheet("color: #64748B; font-size: 11px; font-weight: 600; letter-spacing: 0.5px;");
+    auto makeLabel = [](const QString &text) {
+        QLabel *l = new QLabel(text);
+        l->setStyleSheet("color: #64748B; font-size: 11px; font-weight: 600;");
         return l;
     };
 
     m_regUsernameEdit = new QLineEdit();
-    m_regUsernameEdit->setPlaceholderText("ej: juanperez");
+    m_regUsernameEdit->setPlaceholderText("ej: Juan Perez");
     m_regUsernameEdit->setFixedHeight(42);
     m_regUsernameEdit->setStyleSheet(inputStyle());
 
@@ -262,21 +303,21 @@ void LoginDialog::buildRegisterPanel() {
     m_regEmailEdit->setStyleSheet(inputStyle());
 
     m_regPassEdit = new QLineEdit();
-    m_regPassEdit->setPlaceholderText("Mínimo 6 caracteres");
+    m_regPassEdit->setPlaceholderText("Minimo 6 caracteres");
     m_regPassEdit->setEchoMode(QLineEdit::Password);
     m_regPassEdit->setFixedHeight(42);
     m_regPassEdit->setStyleSheet(inputStyle());
 
     m_regPass2Edit = new QLineEdit();
-    m_regPass2Edit->setPlaceholderText("Repetí la contraseña");
+    m_regPass2Edit->setPlaceholderText("Repeti la contraseña");
     m_regPass2Edit->setEchoMode(QLineEdit::Password);
     m_regPass2Edit->setFixedHeight(42);
     m_regPass2Edit->setStyleSheet(inputStyle());
     connect(m_regPass2Edit, &QLineEdit::returnPressed, this, &LoginDialog::onRegister);
 
-    mainL->addWidget(makeLabel("Usuario"));
+    mainL->addWidget(makeLabel("Nombre"));
     mainL->addWidget(m_regUsernameEdit);
-    mainL->addWidget(makeLabel("Email (opcional)"));
+    mainL->addWidget(makeLabel("Email"));
     mainL->addWidget(m_regEmailEdit);
     mainL->addWidget(makeLabel("Contraseña"));
     mainL->addWidget(m_regPassEdit);
@@ -297,39 +338,38 @@ void LoginDialog::buildRegisterPanel() {
     connect(m_registerBtn, &QPushButton::clicked, this, &LoginDialog::onRegister);
     mainL->addWidget(m_registerBtn);
 
-    // Link a login
     QWidget *loginRow = new QWidget();
     loginRow->setStyleSheet("background: transparent;");
     QHBoxLayout *loginRowL = new QHBoxLayout(loginRow);
-    loginRowL->setContentsMargins(0, 0, 0, 0);
-    loginRowL->setSpacing(4);
+    loginRowL->setContentsMargins(0,0,0,0);
 
     QLabel *loginTxt = new QLabel("¿Ya tenés cuenta?");
     loginTxt->setStyleSheet("color: #475569; font-size: 12px;");
 
     QPushButton *loginLink = new QPushButton("Iniciá sesión");
     loginLink->setCursor(Qt::PointingHandCursor);
-    loginLink->setStyleSheet(linkBtnStyle("#4ADE80"));
+    loginLink->setStyleSheet(linkBtnStyle());
     connect(loginLink, &QPushButton::clicked, this, &LoginDialog::showLoginPanel);
 
     loginRowL->addStretch();
     loginRowL->addWidget(loginTxt);
     loginRowL->addWidget(loginLink);
     loginRowL->addStretch();
-
     mainL->addWidget(loginRow);
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Navegación
+// NAV
 // ─────────────────────────────────────────────────────────────────
-void LoginDialog::showLoginPanel() {
+void LoginDialog::showLoginPanel()
+{
     m_errorLabel->hide();
     m_stack->setCurrentIndex(0);
     setFixedHeight(480);
 }
 
-void LoginDialog::showRegisterPanel() {
+void LoginDialog::showRegisterPanel()
+{
     m_regErrorLabel->hide();
     m_regUsernameEdit->clear();
     m_regEmailEdit->clear();
@@ -340,105 +380,135 @@ void LoginDialog::showRegisterPanel() {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// LOGIN real usando DataManager
+// LOGIN
 // ─────────────────────────────────────────────────────────────────
-void LoginDialog::onLogin() {
-    QString u = m_userEdit->text().trimmed();
-    QString p = m_passEdit->text();
+void LoginDialog::onLogin()
+{
+    QString email    = m_userEdit->text().trimmed();
+    QString password = m_passEdit->text();
 
-    if (u.isEmpty() || p.isEmpty()) {
-        m_errorLabel->setText("Completá usuario y contraseña.");
+    if (email.isEmpty() || password.isEmpty())
+    {
+        m_errorLabel->setText("Completa email y contraseña.");
         m_errorLabel->show();
         return;
     }
 
-    if (DataManager::instance().login(u, p)) {
-        m_username = u;
-        m_registered = false;
-        accept();
-    } else {
-        m_errorLabel->setText("Usuario o contraseña incorrectos.");
-        m_errorLabel->show();
-        m_passEdit->clear();
-        m_passEdit->setFocus();
-    }
+    // nuevo: deshabilitamos el boton y mandamos el login al vps
+    // antes se usaba DataManager::login() local que no funcionaba sin sqlite previo
+    m_loginBtn->setEnabled(false);
+    m_loginBtn->setText("Conectando...");
+    m_errorLabel->hide();
+
+    DataManager::instance().loginRed(email, password);
+}
+
+// nuevo: slot que se ejecuta cuando el vps confirma el login exitoso
+void LoginDialog::onLoginExitoso(int idUsuario, const QString& nombre)
+{
+    Q_UNUSED(idUsuario);
+
+    m_loginBtn->setEnabled(true);
+    m_loginBtn->setText("Ingresar");
+
+    m_username   = nombre;
+    m_registered = false;
+
+    accept();
 }
 
 // ─────────────────────────────────────────────────────────────────
-// REGISTRO real usando DataManager (MODIFICADO PARA RED)
+// REGISTER
 // ─────────────────────────────────────────────────────────────────
-void LoginDialog::onRegister() {
+void LoginDialog::onRegister()
+{
     QString username = m_regUsernameEdit->text().trimmed();
-    QString email    = m_regEmailEdit->text().trimmed(); // opcional, no se usa
+    QString email    = m_regEmailEdit->text().trimmed();
     QString pass1    = m_regPassEdit->text();
     QString pass2    = m_regPass2Edit->text();
 
-    // Validaciones
-    if (username.isEmpty() || pass1.isEmpty()) {
-        m_regErrorLabel->setText("Completá usuario y contraseña.");
+    if (username.isEmpty() || pass1.isEmpty())
+    {
+        m_regErrorLabel->setText("Completa nombre y contraseña.");
         m_regErrorLabel->show();
         return;
     }
-    if (username.length() < 3) {
-        m_regErrorLabel->setText("El usuario debe tener al menos 3 caracteres.");
+
+    if (username.length() < 3)
+    {
+        m_regErrorLabel->setText("El nombre debe tener al menos 3 caracteres.");
         m_regErrorLabel->show();
         return;
     }
-    if (pass1.length() < 6) {
+
+    if (pass1.length() < 6)
+    {
         m_regErrorLabel->setText("La contraseña debe tener al menos 6 caracteres.");
         m_regErrorLabel->show();
         return;
     }
-    if (pass1 != pass2) {
+
+    if (pass1 != pass2)
+    {
         m_regErrorLabel->setText("Las contraseñas no coinciden.");
         m_regErrorLabel->show();
         m_regPass2Edit->clear();
         m_regPass2Edit->setFocus();
         return;
     }
-    if (DataManager::instance().userExists(username)) {
-        m_regErrorLabel->setText("El nombre de usuario ya existe localmente. Elegí otro.");
-        m_regErrorLabel->show();
-        return;
+
+    if (!email.isEmpty())
+    {
+        QRegularExpression regex(
+            R"(^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$)",
+            QRegularExpression::CaseInsensitiveOption
+            );
+        if (!regex.match(email).hasMatch())
+        {
+            m_regErrorLabel->setText("Ingresa un email valido.");
+            m_regErrorLabel->show();
+            return;
+        }
     }
 
-    // NUEVO: Si no ingresó email, generamos uno por defecto para que MySQL no falle
-    if (email.isEmpty()) {
+    if (email.isEmpty())
         email = username + "@email.com";
-    }
 
-    // Bloqueamos la interfaz mientras esperamos al servidor
     m_registerBtn->setEnabled(false);
     m_registerBtn->setText("Conectando al VPS...");
 
-    // Disparamos la petición al servidor (el hash MD5 se hace por dentro)
     DataManager::instance().registrarUsuarioRed(username, email, pass1);
 }
 
 // ─────────────────────────────────────────────────────────────────
-// NUEVO: RESPUESTA DEL SERVIDOR AL REGISTRO
+// RESPUESTA REGISTRO
 // ─────────────────────────────────────────────────────────────────
-void LoginDialog::onRegistroRespuesta(bool exito, const QString &mensaje) {
-    // Restauramos el botón
+void LoginDialog::onRegistroRespuesta(bool exito, const QString& mensaje)
+{
     m_registerBtn->setEnabled(true);
     m_registerBtn->setText("Crear cuenta");
 
-    if (exito) {
-        // Si el servidor confirma la creación, también lo guardamos en local
-        DataManager::instance().addUser(m_regUsernameEdit->text().trimmed(), m_regPassEdit->text());
-
-        m_username   = m_regUsernameEdit->text().trimmed();
-        m_registered = true;
-        accept();   // cierra el diálogo y entra a la app
-    } else {
-        // Si falló en la base de datos (ej: usuario ya registrado allá)
+    if (exito)
+    {
+        // despues del registro exitoso, hacemos login directo contra el vps
+        // para sincronizar los datos del usuario recien creado
+        QMessageBox::information(
+            this, "Registro exitoso",
+            "La cuenta fue creada correctamente.\nAhora ingresa tus datos para entrar."
+            );
+        showLoginPanel();
+        m_userEdit->setText(m_regEmailEdit->text());
+        m_passEdit->setFocus();
+    }
+    else
+    {
         m_regErrorLabel->setText(mensaje);
         m_regErrorLabel->show();
     }
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Getters
+// GETTERS
 // ─────────────────────────────────────────────────────────────────
 QString LoginDialog::getUsername() const { return m_username; }
-bool LoginDialog::wasRegistered() const { return m_registered; }
+bool    LoginDialog::wasRegistered() const { return m_registered; }

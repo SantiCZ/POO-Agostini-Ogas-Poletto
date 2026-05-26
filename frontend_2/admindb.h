@@ -18,9 +18,7 @@ public:
     bool conectar(QString archivoSqlite);
     QSqlDatabase getDB();
 
-    // NUEVO: Método para vaciar las tablas antes de una sincronización
     bool limpiarBaseDeDatos();
-
     bool sincronizarDesdeJson(QByteArray datosJson);
 
     bool guardarUsuarioSesion(QJsonObject usuario);
@@ -30,6 +28,11 @@ public:
     bool guardarNotificaciones(QJsonArray notificaciones);
 
 private:
+    // nuevo: nombre fijo de conexion para que todos reutilicen la misma
+    // antes se usaba el nombre por defecto (qt_sql_default_connection) que
+    // se destruia cada vez que se creaba un nuevo adminDB en cualquier lugar
+    static const QString CONNECTION_NAME;
+
     QSqlDatabase db;
 };
 

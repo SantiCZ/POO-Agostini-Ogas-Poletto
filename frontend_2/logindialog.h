@@ -17,7 +17,10 @@ private slots:
     void onRegister();
     void showLoginPanel();
     void showRegisterPanel();
-    void onRegistroRespuesta(bool exito, const QString &mensaje); // <--- NUEVO: Slot para la respuesta de red
+    // nuevo: respuesta del vps al login real
+    void onLoginExitoso(int idUsuario, const QString& nombre);
+    // respuesta del vps al registro
+    void onRegistroRespuesta(bool exito, const QString& mensaje);
 
 private:
     void buildLoginPanel();
@@ -25,22 +28,24 @@ private:
 
     QStackedWidget *m_stack = nullptr;
 
-    QWidget     *m_loginWidget    = nullptr;
-    QLineEdit   *m_userEdit       = nullptr;
-    QLineEdit   *m_passEdit       = nullptr;
-    QPushButton *m_loginBtn       = nullptr;
-    QPushButton *m_cancelBtn      = nullptr;
-    QLabel      *m_errorLabel     = nullptr;
+    // LOGIN
+    QWidget     *m_loginWidget  = nullptr;
+    QLineEdit   *m_userEdit     = nullptr;  // ahora es el email
+    QLineEdit   *m_passEdit     = nullptr;
+    QPushButton *m_loginBtn     = nullptr;
+    QPushButton *m_cancelBtn    = nullptr;
+    QLabel      *m_errorLabel   = nullptr;
 
-    QWidget     *m_registerWidget = nullptr;
-    QLineEdit   *m_regUsernameEdit= nullptr;   // ¡importante, no cambiar!
-    QLineEdit   *m_regEmailEdit   = nullptr;
-    QLineEdit   *m_regPassEdit    = nullptr;
-    QLineEdit   *m_regPass2Edit   = nullptr;
-    QPushButton *m_registerBtn    = nullptr;
-    QPushButton *m_backBtn        = nullptr;
-    QLabel      *m_regErrorLabel  = nullptr;
+    // REGISTRO
+    QWidget     *m_registerWidget  = nullptr;
+    QLineEdit   *m_regUsernameEdit = nullptr;
+    QLineEdit   *m_regEmailEdit    = nullptr;
+    QLineEdit   *m_regPassEdit     = nullptr;
+    QLineEdit   *m_regPass2Edit    = nullptr;
+    QPushButton *m_registerBtn     = nullptr;
+    QPushButton *m_backBtn         = nullptr;
+    QLabel      *m_regErrorLabel   = nullptr;
 
-    QString  m_username;
-    bool     m_registered = false;
+    QString m_username;
+    bool    m_registered = false;
 };
