@@ -178,6 +178,9 @@ void DataManager::onRespuestaRecibida(
     qDebug() << "RESPUESTA:";
     qDebug() << responseData;
 
+    qDebug() << "JSON VPS:";
+    qDebug().noquote() << responseData;
+
     // ─── LOGIN ───────────────────────────────────
     if (path.contains("/login"))
     {
@@ -641,42 +644,42 @@ QVector<Suscripcion> DataManager::getSuscripciones()
 
     query.prepare(R"(
         SELECT
-            s.id_suscripcion,
+            s.id_suscripcion_local AS id_suscripcion,
             s.nombre,
             s.monto,
             s.vencimiento,
             s.alerta,
             s.actividad,
-            s.id_categoria,
+            s.id_categoria_remota,
             c.nombre AS categoria
         FROM suscripciones s
         LEFT JOIN categorias c
-            ON s.id_categoria = c.id_categoria
-        WHERE s.id_usuario = :uid
+            ON s.id_categoria_remota = c.id_categoria
+        WHERE s.id_usuario_remoto = :uid
         ORDER BY s.vencimiento ASC
     )");
 
-    query.bindValue(":uid", usuarioId);
+    query.addBindValue(usuarioId);
 
     if (!query.exec())
     {
-        qDebug() << "Error getSuscripciones:" << query.lastError().text();
+        qDebug() << "Error getSuscripciones:"
+                 << query.lastError().text()
+                 << query.lastQuery();
         return subs;
     }
 
     while (query.next())
     {
         Suscripcion s;
-        s.id               = query.value("id_suscripcion").toInt();
-        s.nombreServicio   = query.value("nombre").toString();
-        s.monto            = query.value("monto").toDouble();
-        s.fechaVencimiento = QDate::fromString(
-            query.value("vencimiento").toString(), Qt::ISODate
-            );
-        s.diasAviso   = query.value("alerta").toInt();
-        s.activa      = query.value("actividad").toBool();
+        s.id = query.value("id_suscripcion").toInt();
+        s.nombreServicio = query.value("nombre").toString();
+        s.monto = query.value("monto").toDouble();
+        s.fechaVencimiento = QDate::fromString(query.value("vencimiento").toString(), Qt::ISODate);
+        s.diasAviso = query.value("alerta").toInt();
+        s.activa = query.value("actividad").toBool();
         s.iconoNombre = query.value("nombre").toString().toLower();
-        s.categoria   = query.value("categoria").toString();
+        s.categoria = query.value("categoria").toString();
         subs.append(s);
     }
 
@@ -709,7 +712,7 @@ bool DataManager::updateSuscripcionEstado(int id, bool activa)
     query.prepare(R"(
         UPDATE suscripciones
         SET actividad = :actividad
-        WHERE id_suscripcion = :id
+        WHERE id_suscripcion_local = :id
     )");
 
     query.bindValue(":actividad", activa ? 1 : 0);
@@ -733,8 +736,8 @@ bool DataManager::removeSuscripcion(int id)
 
     query.prepare(R"(
         DELETE FROM suscripciones
-        WHERE id_suscripcion = :id
-        AND id_usuario = :uid
+        WHERE id_suscripcion_local = :id
+        AND id_usuario_remoto = :uid
     )");
 
     query.bindValue(":id",  id);
@@ -759,7 +762,7 @@ int DataManager::getSuscripcionesActivas()
     query.prepare(R"(
         SELECT COUNT(*)
         FROM suscripciones
-        WHERE id_usuario = :uid
+        WHERE id_usuario_remoto = :uid
         AND actividad = 1
     )");
 

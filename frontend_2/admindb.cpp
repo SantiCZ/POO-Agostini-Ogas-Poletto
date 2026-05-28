@@ -88,17 +88,22 @@ bool adminDB::conectar(QString archivoSqlite)
 
         query.exec(R"(
             CREATE TABLE IF NOT EXISTS suscripciones (
-                id_suscripcion INTEGER PRIMARY KEY,
-                id_usuario     INTEGER,
-                id_categoria   INTEGER,
-                nombre         TEXT NOT NULL,
-                monto          REAL NOT NULL,
-                moneda         TEXT DEFAULT 'ARS',
-                frecuencia     TEXT DEFAULT 'mensual',
-                vencimiento    TEXT NOT NULL,
-                alerta         INTEGER DEFAULT 3,
-                actividad      INTEGER DEFAULT 1,
-                notas          TEXT
+                id_suscripcion_local INTEGER PRIMARY KEY AUTOINCREMENT,
+                id_suscripcion_remota INTEGER,
+                id_usuario_remoto INTEGER NOT NULL,
+                id_categoria_remota INTEGER,
+                nombre TEXT NOT NULL,
+                monto REAL NOT NULL,
+                moneda TEXT DEFAULT 'ARS',
+                frecuencia TEXT DEFAULT 'mensual',
+                vencimiento DATE NOT NULL,
+                alerta INTEGER DEFAULT 3,
+                actividad INTEGER DEFAULT 1,
+                notas TEXT,
+                sincronizado INTEGER NOT NULL DEFAULT 0,
+                accion_pendiente TEXT DEFAULT 'crear'
+                    CHECK (accion_pendiente IN ('crear','editar','eliminar','ninguna')),
+                fecha_sync DATETIME
             )
         )");
 
@@ -184,7 +189,7 @@ bool adminDB::limpiarBaseDeDatos()
 
     query.prepare(R"(
         DELETE FROM suscripciones
-        WHERE id_usuario = :uid
+        WHERE id_usuario_remoto = :uid
     )");
     query.bindValue(":uid", usuarioId);
     query.exec();
@@ -323,6 +328,7 @@ bool adminDB::guardarCategorias(QJsonArray categorias)
 
     return true;
 }
+
 bool adminDB::guardarGastos(QJsonArray gastos)
 {
     QSqlDatabase conn = QSqlDatabase::database(CONNECTION_NAME);
@@ -363,43 +369,131 @@ bool adminDB::guardarGastos(QJsonArray gastos)
 
 bool adminDB::guardarSuscripciones(QJsonArray suscripciones)
 {
-    QSqlDatabase conn = QSqlDatabase::database(CONNECTION_NAME);
+    QSqlDatabase conn =
+        QSqlDatabase::database(CONNECTION_NAME);
 
-    for (QJsonValue valor : suscripciones)
+    qDebug()
+        << "Cantidad de suscripciones recibidas:"
+        << suscripciones.size();
+
+    for (const QJsonValue &valor : suscripciones)
     {
         QJsonObject sub = valor.toObject();
+
+        qDebug()
+            << "Suscripción JSON:"
+            << sub;
+
         QSqlQuery query(conn);
 
-        // nuevo: usamos las columnas reales del schema (nombre_servicio, fecha_vencimiento)
-        // codigo anterior incorrecto (conservado como referencia):
-        // query.prepare("INSERT INTO suscripciones (id_suscripcion_remota, nombre, monto, vencimiento, sincronizado) ...");
-        // nuevo: columnas reales del schema mysql (nombre, vencimiento, actividad, alerta)
-        // codigo anterior incorrecto (conservado como referencia):
-        // INSERT INTO suscripciones (id_suscripcion_remota, nombre_servicio, fecha_vencimiento...)
-        query.prepare(
-            "INSERT OR REPLACE INTO suscripciones "
-            "(id_suscripcion, id_usuario, id_categoria, nombre, monto, "
-            " moneda, frecuencia, vencimiento, alerta, actividad, notas) "
-            "VALUES (:id, :uid, :cat, :nom, :mon, :mon2, :frec, :venc, :alerta, :activ, :notas)"
+        query.prepare(R"(
+            INSERT OR REPLACE INTO suscripciones
+            (
+                id_suscripcion_remota,
+                id_usuario_remoto,
+                id_categoria_remota,
+                nombre,
+                monto,
+                moneda,
+                frecuencia,
+                vencimiento,
+                alerta,
+                actividad,
+                notas,
+                sincronizado,
+                accion_pendiente,
+                fecha_sync
+            )
+            VALUES
+            (
+                :id_suscripcion,
+                :id_usuario,
+                :id_categoria,
+                :nombre,
+                :monto,
+                :moneda,
+                :frecuencia,
+                :vencimiento,
+                :alerta,
+                :actividad,
+                :notas,
+                1,
+                'ninguna',
+                datetime('now')
+            )
+        )");
+
+        query.bindValue(
+            ":id_suscripcion",
+            sub["id_suscripcion"].toInt()
             );
-        query.bindValue(":id",     sub["id_suscripcion"].toInt());
-        query.bindValue(":uid",    sub["id_usuario"].toInt());
-        query.bindValue(":cat",    sub["id_categoria"].toInt());
-        query.bindValue(":nom",    sub["nombre"].toString());
-        query.bindValue(":mon",    sub["monto"].toDouble());
-        query.bindValue(":mon2",   sub["moneda"].toString());
-        query.bindValue(":frec",   sub["frecuencia"].toString());
-        query.bindValue(":venc",   sub["vencimiento"].toString());
-        query.bindValue(":alerta", sub["alerta"].toInt());
-        query.bindValue(":activ",  sub["actividad"].toInt());
-        query.bindValue(":notas",  sub["notas"].toString());
+
+        query.bindValue(
+            ":id_usuario",
+            sub["id_usuario"].toInt()
+            );
+
+        query.bindValue(
+            ":id_categoria",
+            sub["id_categoria"].toInt()
+            );
+
+        query.bindValue(
+            ":nombre",
+            sub["nombre"].toString()
+            );
+
+        query.bindValue(
+            ":monto",
+            sub["monto"].toDouble()
+            );
+
+        query.bindValue(
+            ":moneda",
+            sub["moneda"].toString()
+            );
+
+        query.bindValue(
+            ":frecuencia",
+            sub["frecuencia"].toString()
+            );
+
+        query.bindValue(
+            ":vencimiento",
+            sub["vencimiento"].toString()
+            );
+
+        query.bindValue(
+            ":alerta",
+            sub["alerta"].toInt()
+            );
+
+        query.bindValue(
+            ":actividad",
+            sub["actividad"].toInt()
+            );
+
+        query.bindValue(
+            ":notas",
+            sub["notas"].toString()
+            );
 
         if (!query.exec())
         {
-            qDebug() << "guardarSuscripciones error:" << query.lastError().text()
-            << "| datos:" << sub;
+            qDebug()
+            << "guardarSuscripciones error:"
+            << query.lastError().text();
+
+            qDebug()
+                << "Consulta:"
+                << query.lastQuery();
+
             return false;
         }
+
+        qDebug()
+            << "Suscripción guardada:"
+            << sub["nombre"].toString();
     }
 
     return true;
@@ -434,6 +528,48 @@ bool adminDB::guardarNotificaciones(QJsonArray notificaciones)
             << query.lastError().text()
             << "| datos:" << notif;
 
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool adminDB::generarNotificacionesVencimiento()
+{
+    QSqlDatabase conn = QSqlDatabase::database(CONNECTION_NAME);
+    QSqlQuery query(conn);
+
+    query.prepare(R"(
+        SELECT id_suscripcion, id_usuario, nombre, vencimiento, alerta
+        FROM suscripciones
+        WHERE actividad = 1
+        AND date(vencimiento) <= date('now', '+' || alerta || ' days')
+    )");
+
+    if (!query.exec()) {
+        qDebug() << "Error buscando suscripciones por vencer:"
+                 << query.lastError().text();
+        return false;
+    }
+
+    while (query.next()) {
+        QSqlQuery insert(conn);
+
+        insert.prepare(R"(
+            INSERT INTO notificaciones
+            (id_usuario, tipo, mensaje, leida, fecha_creacion)
+            VALUES (:uid, 'vencimiento', :mensaje, 0, datetime('now'))
+        )");
+
+        insert.bindValue(":uid", query.value("id_usuario").toInt());
+        insert.bindValue(":mensaje",
+                         "Tu suscripción " + query.value("nombre").toString()
+                             + " está próxima a vencer.");
+
+        if (!insert.exec()) {
+            qDebug() << "Error creando notificación:"
+                     << insert.lastError().text();
             return false;
         }
     }

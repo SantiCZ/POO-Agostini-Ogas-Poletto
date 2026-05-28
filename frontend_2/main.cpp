@@ -37,6 +37,10 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    qDebug() << "SQLite conectado en:" << rutaDB;
+    qDebug() << "Ruta absoluta SQLite:" << QFileInfo(rutaDB).absoluteFilePath();
+    qDebug() << "Existe SQLite:" << QFileInfo(rutaDB).exists();
+
     // ── 2. Login ─────────────────────────────────────────────────────
     LoginDialog login;
     if (login.exec() != QDialog::Accepted)
