@@ -659,7 +659,7 @@ QVector<Suscripcion> DataManager::getSuscripciones()
         ORDER BY s.vencimiento ASC
     )");
 
-    query.addBindValue(usuarioId);
+    query.bindValue(":uid", usuarioId);
 
     if (!query.exec())
     {
