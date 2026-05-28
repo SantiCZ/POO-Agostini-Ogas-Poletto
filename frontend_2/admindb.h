@@ -25,9 +25,9 @@ public:
     bool guardarCategorias(QJsonArray categorias);
     bool guardarGastos(QJsonArray gastos);
     bool guardarSuscripciones(QJsonArray suscripciones);
+    bool obtenerUltimoUsuario(QString &nombre, QString &email);
     bool guardarNotificaciones(QJsonArray notificaciones);
     bool generarNotificacionesVencimiento();
-    //bool obtenerUltimoUsuario(QString &nombre, QString &email);
     //bool eliminarSuscripcionLocal(int idSuscripcionLocal);
 
 private:

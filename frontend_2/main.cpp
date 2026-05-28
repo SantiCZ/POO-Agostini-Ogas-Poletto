@@ -41,6 +41,16 @@ int main(int argc, char *argv[]) {
     qDebug() << "Ruta absoluta SQLite:" << QFileInfo(rutaDB).absoluteFilePath();
     qDebug() << "Existe SQLite:" << QFileInfo(rutaDB).exists();
 
+    QString ultimoNombre;
+    QString ultimoEmail;
+
+    if (dbProyecto.obtenerUltimoUsuario(ultimoNombre, ultimoEmail))
+    {
+        qDebug() << "Ultimo usuario usado:"
+                 << ultimoNombre
+                 << ultimoEmail;
+    }
+
     // ── 2. Login ─────────────────────────────────────────────────────
     LoginDialog login;
     if (login.exec() != QDialog::Accepted)

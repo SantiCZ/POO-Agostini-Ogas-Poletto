@@ -247,6 +247,9 @@ void DataManager::onRespuestaRecibida(
     {
         if (m_db.sincronizarDesdeJson(responseData))
         {
+            // NUEVO: revisa las suscripciones sincronizadas y genera avisos de vencimiento
+            m_db.generarNotificacionesVencimiento();
+
             qDebug() << "Sincronizacion OK";
             emit sincronizacionCompletada();
             emit ticketsChanged();
@@ -734,8 +737,13 @@ bool DataManager::removeSuscripcion(int id)
 
     QSqlQuery query(m_db.getDB());
 
+    // cambie el DELETE por UPDATE para que en vez de borrar las
+    //suscripciones de la base de datos las ponga en inactiva si la borra
     query.prepare(R"(
-        DELETE FROM suscripciones
+        UPDATE suscripciones
+        SET actividad = 0,
+            sincronizado = 0,
+            accion_pendiente = 'eliminar'
         WHERE id_suscripcion_local = :id
         AND id_usuario_remoto = :uid
     )");
@@ -762,8 +770,9 @@ int DataManager::getSuscripcionesActivas()
     query.prepare(R"(
         SELECT COUNT(*)
         FROM suscripciones
-        WHERE id_usuario_remoto = :uid
-        AND actividad = 1
+        WHERE s.id_usuario_remoto = :uid
+        AND s.actividad = 1
+        ORDER BY s.vencimiento ASC
     )");
 
     query.bindValue(":uid", usuarioId);

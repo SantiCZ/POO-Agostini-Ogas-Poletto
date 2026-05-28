@@ -264,6 +264,12 @@ bool adminDB::sincronizarDesdeJson(QByteArray datosJson)
 bool adminDB::guardarUsuarioSesion(QJsonObject usuario)
 {
     QSqlDatabase conn = QSqlDatabase::database(CONNECTION_NAME);
+
+    QSqlQuery limpiarSesion(conn);
+    limpiarSesion.exec(R"(
+        DELETE FROM usuario_sesion
+    )");
+
     QSqlQuery query(conn);
 
     // nuevo: INSERT OR REPLACE para no fallar si ya habia una fila previa.
@@ -293,6 +299,8 @@ bool adminDB::guardarUsuarioSesion(QJsonObject usuario)
     }
     return true;
 }
+
+
 
 bool adminDB::guardarCategorias(QJsonArray categorias)
 {
@@ -499,6 +507,8 @@ bool adminDB::guardarSuscripciones(QJsonArray suscripciones)
     return true;
 }
 
+
+
 bool adminDB::guardarNotificaciones(QJsonArray notificaciones)
 {
     QSqlDatabase conn = QSqlDatabase::database(CONNECTION_NAME);
@@ -535,41 +545,81 @@ bool adminDB::guardarNotificaciones(QJsonArray notificaciones)
     return true;
 }
 
-bool adminDB::generarNotificacionesVencimiento()
+bool adminDB::obtenerUltimoUsuario(QString &nombre, QString &email)
 {
     QSqlDatabase conn = QSqlDatabase::database(CONNECTION_NAME);
+
     QSqlQuery query(conn);
 
     query.prepare(R"(
-        SELECT id_suscripcion, id_usuario, nombre, vencimiento, alerta
+        SELECT nombre, email
+        FROM usuario_sesion
+        WHERE sesion_activa = 1
+        LIMIT 1
+    )");
+
+    if (!query.exec())
+    {
+        qDebug() << "Error obteniendo ultimo usuario:"
+                 << query.lastError().text();
+        return false;
+    }
+
+    if (query.next())
+    {
+        nombre = query.value("nombre").toString();
+        email = query.value("email").toString();
+        return true;
+    }
+
+    return false;
+}
+
+bool adminDB::generarNotificacionesVencimiento()
+{
+    QSqlDatabase conn = QSqlDatabase::database(CONNECTION_NAME);
+
+    QSqlQuery buscar(conn);
+
+    buscar.prepare(R"(
+        SELECT id_usuario_remoto, nombre, vencimiento, alerta
         FROM suscripciones
         WHERE actividad = 1
         AND date(vencimiento) <= date('now', '+' || alerta || ' days')
     )");
 
-    if (!query.exec()) {
-        qDebug() << "Error buscando suscripciones por vencer:"
-                 << query.lastError().text();
+    if (!buscar.exec())
+    {
+        qDebug() << "Error buscando vencimientos:"
+                 << buscar.lastError().text();
         return false;
     }
 
-    while (query.next()) {
-        QSqlQuery insert(conn);
+    while (buscar.next())
+    {
+        int idUsuario = buscar.value("id_usuario_remoto").toInt();
+        QString nombre = buscar.value("nombre").toString();
+        QString vencimiento = buscar.value("vencimiento").toString();
 
-        insert.prepare(R"(
+        QSqlQuery insertar(conn);
+
+        insertar.prepare(R"(
             INSERT INTO notificaciones
             (id_usuario, tipo, mensaje, leida, fecha_creacion)
             VALUES (:uid, 'vencimiento', :mensaje, 0, datetime('now'))
         )");
 
-        insert.bindValue(":uid", query.value("id_usuario").toInt());
-        insert.bindValue(":mensaje",
-                         "Tu suscripción " + query.value("nombre").toString()
-                             + " está próxima a vencer.");
+        insertar.bindValue(":uid", idUsuario);
+        insertar.bindValue(
+            ":mensaje",
+            "Tu suscripcion " + nombre +
+                " vence el " + vencimiento
+            );
 
-        if (!insert.exec()) {
-            qDebug() << "Error creando notificación:"
-                     << insert.lastError().text();
+        if (!insertar.exec())
+        {
+            qDebug() << "Error creando notificacion:"
+                     << insertar.lastError().text();
             return false;
         }
     }
