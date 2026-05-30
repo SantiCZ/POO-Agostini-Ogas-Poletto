@@ -335,10 +335,19 @@ void DataManager::analizarTicketRed(
         new QHttpMultiPart(QHttpMultiPart::FormDataType);
 
     QHttpPart imagePart;
+
+    // ─── NUEVA IMPLEMENTACIÓN: Detección de PDF ───
+    QString mimeType = "image/jpeg";
+    if (rutaImagen.endsWith(".pdf", Qt::CaseInsensitive)) {
+        mimeType = "application/pdf";
+    }
+
     imagePart.setHeader(
         QNetworkRequest::ContentTypeHeader,
-        QVariant("image/jpeg")
+        QVariant(mimeType)
         );
+    // ──────────────────────────────────────────────
+
     imagePart.setHeader(
         QNetworkRequest::ContentDispositionHeader,
         QVariant(
@@ -350,7 +359,7 @@ void DataManager::analizarTicketRed(
     QFile *file = new QFile(rutaImagen);
     if (!file->open(QIODevice::ReadOnly))
     {
-        emit errorDeRed("Error abriendo imagen.");
+        emit errorDeRed("Error abriendo el archivo.");
         delete file;
         delete multiPart;
         cambiarEstadoRed(ERROR_CONEXION);
