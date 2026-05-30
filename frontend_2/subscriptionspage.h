@@ -29,6 +29,10 @@ signals:
     void deleteRequested(
         int idRemoto
         );
+
+    void editRequested(
+        int idRemoto
+        );
 };
 
 class SubscriptionsPage : public QWidget
@@ -44,6 +48,9 @@ public:
 
 public slots:
     void onAddClicked();
+
+private slots:
+    void onEditClicked(int id);
 
 private:
     void setupUI();

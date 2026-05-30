@@ -6,6 +6,8 @@
 #include <QFrame>
 #include <QRegularExpression>
 #include <QMessageBox>
+#include <QCheckBox>
+#include <QSettings>
 
 // ─────────────────────────────────────────────────────────────────
 // Helpers de estilo
@@ -81,7 +83,7 @@ LoginDialog::LoginDialog(QWidget *parent)
 {
     setWindowTitle("AlcancIA");
     setModal(true);
-    setFixedSize(400, 480);
+    setFixedSize(400, 520);
     setStyleSheet(R"(
         QDialog { background-color: #0F1117; border: 1px solid #2E3347; border-radius: 16px; }
         QLabel  { background: transparent; }
@@ -99,9 +101,10 @@ LoginDialog::LoginDialog(QWidget *parent)
 
     showLoginPanel();
 
+    // Cargar último email recordado (usando QSettings)
+    cargarUltimoUsuario();
+
     // nuevo: conectamos las señales del login real contra el vps
-    // antes se usaba DataManager::login() local que siempre fallaba
-    // si sqlite no tenia datos todavia
     connect(&DataManager::instance(),
             &DataManager::loginExitoso,
             this,
@@ -132,14 +135,12 @@ LoginDialog::LoginDialog(QWidget *parent)
             &DataManager::errorDeRed,
             this,
             [this](const QString& mensaje) {
-                // error durante registro
                 if (m_stack->currentIndex() == 1) {
                     m_registerBtn->setEnabled(true);
                     m_registerBtn->setText("Crear cuenta");
                     m_regErrorLabel->setText(mensaje);
                     m_regErrorLabel->show();
                 }
-                // error durante login
                 else {
                     m_loginBtn->setEnabled(true);
                     m_loginBtn->setText("Ingresar");
@@ -158,7 +159,7 @@ void LoginDialog::buildLoginPanel()
     m_loginWidget->setStyleSheet("background: transparent;");
 
     QVBoxLayout *mainL = new QVBoxLayout(m_loginWidget);
-    mainL->setContentsMargins(36, 36, 36, 36);
+    mainL->setContentsMargins(36, 30, 36, 24);
     mainL->setSpacing(14);
 
     QLabel *logo = new QLabel("🏦");
@@ -184,7 +185,7 @@ void LoginDialog::buildLoginPanel()
     mainL->addWidget(sep);
     mainL->addSpacing(4);
 
-    // nuevo: el login usa email, no usuario, para coincidir con el vps
+    // Email
     QLabel *emailLabel = new QLabel("Email");
     emailLabel->setStyleSheet("color: #64748B; font-size: 11px; font-weight: 600;");
 
@@ -201,9 +202,7 @@ void LoginDialog::buildLoginPanel()
     m_passEdit->setEchoMode(QLineEdit::Password);
     m_passEdit->setStyleSheet(inputStyle());
     m_passEdit->setFixedHeight(42);
-
-    connect(m_passEdit, &QLineEdit::returnPressed,
-            this, &LoginDialog::onLogin);
+    connect(m_passEdit, &QLineEdit::returnPressed, this, &LoginDialog::onLogin);
 
     m_errorLabel = new QLabel();
     m_errorLabel->setStyleSheet("color: #F87171; font-size: 12px;");
@@ -216,21 +215,41 @@ void LoginDialog::buildLoginPanel()
     mainL->addWidget(m_passEdit);
     mainL->addWidget(m_errorLabel);
 
+    // Checkbox "Recordarme"
+    m_recordarmeCheck = new QCheckBox("Recordarme");
+    m_recordarmeCheck->setStyleSheet("color: #64748B; font-size: 12px;");
+    mainL->addSpacing(6);
+    mainL->addWidget(m_recordarmeCheck);
+
+    // ─────────────────────────────────────────────────────────────
+    // BOTONES HORIZONTALES MAS DELGADOS
+    // ─────────────────────────────────────────────────────────────
+    QWidget *buttonContainer = new QWidget();
+    QHBoxLayout *buttonLayout = new QHBoxLayout(buttonContainer);
+    buttonLayout->setContentsMargins(0, 0, 0, 0);
+    buttonLayout->setSpacing(12);
+
     m_loginBtn = new QPushButton("Ingresar");
     m_loginBtn->setFixedHeight(44);
+    m_loginBtn->setFixedWidth(130);      // más delgado
     m_loginBtn->setCursor(Qt::PointingHandCursor);
     m_loginBtn->setStyleSheet(primaryBtnStyle());
     connect(m_loginBtn, &QPushButton::clicked, this, &LoginDialog::onLogin);
 
     m_cancelBtn = new QPushButton("Cancelar");
     m_cancelBtn->setFixedHeight(40);
+    m_cancelBtn->setFixedWidth(130);     // más delgado
     m_cancelBtn->setCursor(Qt::PointingHandCursor);
     m_cancelBtn->setStyleSheet(ghostBtnStyle());
     connect(m_cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
 
-    mainL->addWidget(m_loginBtn);
-    mainL->addWidget(m_cancelBtn);
-    mainL->addStretch();
+    buttonLayout->addStretch();
+    buttonLayout->addWidget(m_loginBtn);
+    buttonLayout->addWidget(m_cancelBtn);
+    buttonLayout->addStretch();
+
+    mainL->addWidget(buttonContainer);
+    // Eliminado el addStretch() que seguía a los botones
 
     QWidget *regRow = new QWidget();
     regRow->setStyleSheet("background: transparent;");
@@ -365,7 +384,7 @@ void LoginDialog::showLoginPanel()
 {
     m_errorLabel->hide();
     m_stack->setCurrentIndex(0);
-    setFixedHeight(480);
+    setFixedHeight(520);
 }
 
 void LoginDialog::showRegisterPanel()
@@ -394,8 +413,6 @@ void LoginDialog::onLogin()
         return;
     }
 
-    // nuevo: deshabilitamos el boton y mandamos el login al vps
-    // antes se usaba DataManager::login() local que no funcionaba sin sqlite previo
     m_loginBtn->setEnabled(false);
     m_loginBtn->setText("Conectando...");
     m_errorLabel->hide();
@@ -413,6 +430,18 @@ void LoginDialog::onLoginExitoso(int idUsuario, const QString& nombre)
 
     m_username   = nombre;
     m_registered = false;
+
+    // Guardar email si el checkbox está marcado
+    if (m_recordarmeCheck && m_recordarmeCheck->isChecked())
+    {
+        QSettings settings("AlcancIA", "Login");
+        settings.setValue("ultimoEmail", m_userEdit->text());
+    }
+    else
+    {
+        QSettings settings("AlcancIA", "Login");
+        settings.remove("ultimoEmail");
+    }
 
     accept();
 }
@@ -490,8 +519,6 @@ void LoginDialog::onRegistroRespuesta(bool exito, const QString& mensaje)
 
     if (exito)
     {
-        // despues del registro exitoso, hacemos login directo contra el vps
-        // para sincronizar los datos del usuario recien creado
         QMessageBox::information(
             this, "Registro exitoso",
             "La cuenta fue creada correctamente.\nAhora ingresa tus datos para entrar."
@@ -512,3 +539,19 @@ void LoginDialog::onRegistroRespuesta(bool exito, const QString& mensaje)
 // ─────────────────────────────────────────────────────────────────
 QString LoginDialog::getUsername() const { return m_username; }
 bool    LoginDialog::wasRegistered() const { return m_registered; }
+
+// ─────────────────────────────────────────────────────────────────
+// Cargar último email recordado desde QSettings
+// ─────────────────────────────────────────────────────────────────
+void LoginDialog::cargarUltimoUsuario()
+{
+    QSettings settings("AlcancIA", "Login");
+    QString ultimoEmail = settings.value("ultimoEmail").toString();
+    if (!ultimoEmail.isEmpty())
+    {
+        m_userEdit->setText(ultimoEmail);
+        if (m_recordarmeCheck)
+            m_recordarmeCheck->setChecked(true);
+        m_passEdit->setFocus();
+    }
+}

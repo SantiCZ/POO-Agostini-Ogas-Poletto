@@ -91,3 +91,13 @@ static const QStringList CATEGORIAS =
         "Tecnología",
         "Otro"
 };
+struct Notificacion
+{
+    QString titulo;
+
+    QString mensaje;
+
+    QDate fecha;
+
+    bool leida = false;
+};

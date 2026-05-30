@@ -4,6 +4,7 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QStackedWidget>
+#include <QCheckBox>
 
 class LoginDialog : public QDialog {
     Q_OBJECT
@@ -17,24 +18,24 @@ private slots:
     void onRegister();
     void showLoginPanel();
     void showRegisterPanel();
-    // nuevo: respuesta del vps al login real
     void onLoginExitoso(int idUsuario, const QString& nombre);
-    // respuesta del vps al registro
     void onRegistroRespuesta(bool exito, const QString& mensaje);
 
 private:
     void buildLoginPanel();
     void buildRegisterPanel();
+    void cargarUltimoUsuario();   // <--- nuevo
 
     QStackedWidget *m_stack = nullptr;
 
     // LOGIN
     QWidget     *m_loginWidget  = nullptr;
-    QLineEdit   *m_userEdit     = nullptr;  // ahora es el email
+    QLineEdit   *m_userEdit     = nullptr;  // email
     QLineEdit   *m_passEdit     = nullptr;
     QPushButton *m_loginBtn     = nullptr;
     QPushButton *m_cancelBtn    = nullptr;
     QLabel      *m_errorLabel   = nullptr;
+    QCheckBox   *m_recordarmeCheck = nullptr;   // <--- nuevo
 
     // REGISTRO
     QWidget     *m_registerWidget  = nullptr;

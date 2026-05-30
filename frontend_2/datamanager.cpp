@@ -10,6 +10,8 @@
 
 #include <QDebug>
 #include <QMap>
+#include <QSettings>// añado para recordar usuario
+
 
 #include <QFile>
 #include <QFileInfo>
@@ -987,4 +989,83 @@ DataManager::getGastosPorSemana(int year, int month)
 QSqlDatabase DataManager::getDB()
 {
     return m_db.getDB();
+}
+// bool DataManager::updateSuscripcion(const Suscripcion &s)
+// {
+//     for (int i = 0; i < m_suscripciones.size(); i++) {
+
+//         if (m_suscripciones[i].id == s.id) {
+
+//             m_suscripciones[i] = s;
+
+//             emit suscripcionesChanged();
+
+//             return true;
+//         }
+//     }
+
+//     return false;
+// }
+bool DataManager::updateSuscripcion(const Suscripcion &s)
+{
+    QSqlQuery query;
+
+    query.prepare(R"(
+        UPDATE suscripciones
+        SET nombre_servicio = ?,
+            monto = ?,
+            fecha_vencimiento = ?,
+            dias_aviso = ?,
+            categoria = ?,
+            icono_nombre = ?,
+            sincronizado = 0,
+            accion_pendiente = 'editar'
+        WHERE id = ?
+    )");
+
+    query.addBindValue(s.nombreServicio);
+    query.addBindValue(s.monto);
+    query.addBindValue(s.fechaVencimiento.toString(Qt::ISODate));
+    query.addBindValue(s.diasAviso);
+    query.addBindValue(s.categoria);
+    query.addBindValue(s.iconoNombre);
+    query.addBindValue(s.id);
+
+    bool ok = query.exec();
+
+    if (!ok) {
+        qDebug() << "Error updateSuscripcion:"
+                 << query.lastError().text();
+        return false;
+    }
+
+    emit suscripcionesChanged();
+
+    return true;
+}
+QVector<Notificacion>
+DataManager::getNotificaciones() const
+{
+    return m_notificaciones;
+}
+
+void DataManager::agregarNotificacion(
+    const Notificacion &n
+    )
+{
+    m_notificaciones.push_back(n);
+
+    emit notificacionesChanged();
+}
+
+QString DataManager::getUltimoEmail() const
+{
+    QSettings settings("AlcancIA", "Login");
+    return settings.value("ultimoEmail").toString();
+}
+//añado para que recuerde usuario al hacer click en la casilla de recordarme
+void DataManager::setUltimoEmail(const QString &email)
+{
+    QSettings settings("AlcancIA", "Login");
+    settings.setValue("ultimoEmail", email);
 }
