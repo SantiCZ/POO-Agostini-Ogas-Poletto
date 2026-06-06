@@ -357,6 +357,8 @@ void DataManager::onRespuestaRecibida(
             // NUEVO: revisa las suscripciones sincronizadas y genera avisos de vencimiento
             m_db.generarNotificacionesVencimiento();
 
+            cargarNotificacionesDesdeSQLite();
+
             qDebug() << "Sincronizacion OK";
             emit sincronizacionCompletada();
             emit ticketsChanged();
@@ -1202,4 +1204,44 @@ void DataManager::setUltimoEmail(const QString &email)
 {
     QSettings settings("AlcancIA", "Login");
     settings.setValue("ultimoEmail", email);
+}
+
+void DataManager::cargarNotificacionesDesdeSQLite()
+{
+    m_notificaciones.clear();
+
+    int usuarioId = getUsuarioActivoId();
+
+    QSqlQuery query(m_db.getDB());
+
+    query.prepare(R"(
+        SELECT mensaje, fecha_creacion
+        FROM notificaciones
+        WHERE id_usuario = :uid
+        AND leida = 0
+        ORDER BY fecha_creacion DESC
+    )");
+
+    query.bindValue(":uid", usuarioId);
+
+    if (!query.exec())
+    {
+        qDebug() << "Error cargando notificaciones:"
+                 << query.lastError().text();
+        return;
+    }
+
+    while (query.next())
+    {
+        Notificacion n;
+        n.mensaje = query.value("mensaje").toString();
+        n.fecha = QDate::fromString(
+            query.value("fecha_creacion").toString().left(10),
+            Qt::ISODate
+            );
+
+        m_notificaciones.append(n);
+    }
+
+    emit notificacionesChanged();
 }

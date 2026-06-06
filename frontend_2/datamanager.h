@@ -1,9 +1,13 @@
 #pragma once
+
 #include <QObject>
 #include <QVector>
+#include <QString>
+#include <QSqlDatabase>
 #include <QtNetwork/QNetworkAccessManager>
 #include <QtNetwork/QNetworkReply>
 #include <QJsonObject>
+
 #include "models.h"
 #include "admindb.h"
 
@@ -19,6 +23,7 @@ public:
     // Notificaciones
     QVector<Notificacion> getNotificaciones() const;
     void agregarNotificacion(const Notificacion &n);
+    void cargarNotificacionesDesdeSQLite();
 
     // Suscripciones (solo una declaración)
     bool updateSuscripcion(const Suscripcion &s);
