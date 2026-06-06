@@ -59,9 +59,7 @@ SubCard::SubCard(const Suscripcion &sub, QWidget *parent)
     QLabel *iconL = new QLabel(icon);
     iconL->setFixedSize(52, 52);
     iconL->setAlignment(Qt::AlignCenter);
-    iconL->setStyleSheet(
-        "background-color: #21253A; border-radius: 13px; font-size: 24px;"
-        );
+    iconL->setStyleSheet("background-color: #21253A; border-radius: 13px; font-size: 24px;");
 
     QWidget *infoW = new QWidget();
     infoW->setStyleSheet("background: transparent;");
@@ -76,17 +74,12 @@ SubCard::SubCard(const Suscripcion &sub, QWidget *parent)
     nameRowL->setSpacing(8);
 
     QLabel *nameL = new QLabel(sub.nombreServicio);
-    nameL->setStyleSheet(
-        "color: #F1F5F9; font-size: 14px; font-weight: 700; background: transparent;"
-        );
+    nameL->setStyleSheet("color: #F1F5F9; font-size: 14px; font-weight: 700; background: transparent;");
     nameRowL->addWidget(nameL);
 
     if (!sub.activa) {
         QLabel *pauseBadge = new QLabel("Pausada");
-        pauseBadge->setStyleSheet(
-            "color: #64748B; background-color: #21253A; border-radius: 6px;"
-            "padding: 2px 8px; font-size: 11px;"
-            );
+        pauseBadge->setStyleSheet("color: #64748B; background-color: #21253A; border-radius: 6px; padding: 2px 8px; font-size: 11px;");
         nameRowL->addWidget(pauseBadge);
     }
     nameRowL->addStretch();
@@ -114,7 +107,7 @@ SubCard::SubCard(const Suscripcion &sub, QWidget *parent)
     infoL->addWidget(diasL);
     infoL->addWidget(catL);
 
-    // ── Panel derecho ──────────────────────────────────────────
+    // Panel derecho
     QWidget *rightW = new QWidget();
     rightW->setStyleSheet("background: transparent;");
     QVBoxLayout *rightL = new QVBoxLayout(rightW);
@@ -122,13 +115,9 @@ SubCard::SubCard(const Suscripcion &sub, QWidget *parent)
     rightL->setSpacing(6);
     rightL->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
-    QLabel *montoL = new QLabel(
-        QString("$%1/mes").arg(sub.monto, 0, 'f', 0)
-        );
+    QLabel *montoL = new QLabel(QString("$%1/mes").arg(sub.monto, 0, 'f', 0));
     montoL->setAlignment(Qt::AlignRight);
-    montoL->setStyleSheet(
-        "color: #38BDF8; font-size: 15px; font-weight: 700; background: transparent;"
-        );
+    montoL->setStyleSheet("color: #38BDF8; font-size: 15px; font-weight: 700; background: transparent;");
 
     QWidget *actionsW = new QWidget();
     actionsW->setStyleSheet("background: transparent;");
@@ -136,27 +125,28 @@ SubCard::SubCard(const Suscripcion &sub, QWidget *parent)
     actL->setContentsMargins(0, 0, 0, 0);
     actL->setSpacing(4);
 
-    QString btnBase =
-        "QPushButton { background: transparent; border: none; font-size: 14px; }"
-        "QPushButton:hover { background-color: #21253A; border-radius: 6px; }";
+    QString btnBase = "QPushButton { background: transparent; border: none; font-size: 14px; }"
+                      "QPushButton:hover { background-color: #21253A; border-radius: 6px; }";
 
     // Botón toggle (pausar/reanudar)
     QPushButton *toggleBtn = new QPushButton(sub.activa ? "⏸" : "▶");
     toggleBtn->setFixedSize(28, 28);
     toggleBtn->setCursor(Qt::PointingHandCursor);
     toggleBtn->setStyleSheet(btnBase);
+    toggleBtn->setToolTip(sub.activa ? "Pausar suscripción" : "Reanudar suscripción");
     connect(toggleBtn, &QPushButton::clicked, this,
             [this, id = sub.id, activa = sub.activa]() {
                 emit toggleRequested(id, !activa);
             });
 
-    // Botón editar
+    // Botón editar (más grande y con tooltip)
     QPushButton *editBtn = new QPushButton("✏");
-    editBtn->setFixedSize(28, 28);
+    editBtn->setFixedSize(32, 32);  // Antes 28x28
     editBtn->setCursor(Qt::PointingHandCursor);
+    editBtn->setToolTip("Editar suscripción");
     editBtn->setStyleSheet(
-        "QPushButton { background: transparent; border: none; font-size: 13px; }"
-        "QPushButton:hover { background-color: rgba(56,189,248,0.12); border-radius: 6px; }"
+        "QPushButton { background: transparent; border: none; font-size: 15px; }"
+        "QPushButton:hover { background-color: rgba(56,189,248,0.12); border-radius: 8px; }"
         );
     connect(editBtn, &QPushButton::clicked, this,
             [this, id = sub.id]() {
@@ -167,6 +157,7 @@ SubCard::SubCard(const Suscripcion &sub, QWidget *parent)
     QPushButton *delBtn = new QPushButton("🗑");
     delBtn->setFixedSize(28, 28);
     delBtn->setCursor(Qt::PointingHandCursor);
+    delBtn->setToolTip("Eliminar suscripción");
     delBtn->setStyleSheet(
         "QPushButton { background: transparent; border: none; font-size: 14px; }"
         "QPushButton:hover { background-color: rgba(248,113,113,0.1); border-radius: 6px; }"
@@ -187,10 +178,6 @@ SubCard::SubCard(const Suscripcion &sub, QWidget *parent)
     layout->addWidget(infoW, 1);
     layout->addWidget(rightW);
 }
-
-// ============================================================
-// SubscriptionsPage
-// ============================================================
 
 SubscriptionsPage::SubscriptionsPage(QWidget *parent)
     : QWidget(parent)
@@ -219,7 +206,7 @@ void SubscriptionsPage::setupUI()
     mainL->setContentsMargins(32, 28, 32, 32);
     mainL->setSpacing(20);
 
-    // ── Header ─────────────────────────────────────────────────
+    // Header
     QWidget *headerW = new QWidget();
     headerW->setStyleSheet("background: transparent;");
     QHBoxLayout *headerL = new QHBoxLayout(headerW);
@@ -232,9 +219,7 @@ void SubscriptionsPage::setupUI()
     titleL->setSpacing(2);
 
     QLabel *title = new QLabel("🔄  Suscripciones");
-    title->setStyleSheet(
-        "color: #F1F5F9; font-size: 24px; font-weight: 700; background: transparent;"
-        );
+    title->setStyleSheet("color: #F1F5F9; font-size: 24px; font-weight: 700; background: transparent;");
 
     QWidget *statsRow = new QWidget();
     statsRow->setStyleSheet("background: transparent;");
@@ -243,14 +228,10 @@ void SubscriptionsPage::setupUI()
     statsL->setSpacing(16);
 
     m_countLabel = new QLabel("0 suscripciones");
-    m_countLabel->setStyleSheet(
-        "color: #64748B; font-size: 13px; background: transparent;"
-        );
+    m_countLabel->setStyleSheet("color: #64748B; font-size: 13px; background: transparent;");
 
     m_totalLabel = new QLabel("Total: $0/mes");
-    m_totalLabel->setStyleSheet(
-        "color: #38BDF8; font-size: 13px; font-weight: 600; background: transparent;"
-        );
+    m_totalLabel->setStyleSheet("color: #38BDF8; font-size: 13px; font-weight: 600; background: transparent;");
 
     statsL->addWidget(m_countLabel);
     statsL->addWidget(m_totalLabel);
@@ -268,7 +249,7 @@ void SubscriptionsPage::setupUI()
 
     mainL->addWidget(headerW);
 
-    // ── Lista ───────────────────────────────────────────────────
+    // Lista
     m_subListWidget = new QWidget();
     m_subListWidget->setStyleSheet("background: transparent;");
     m_subListLayout = new QVBoxLayout(m_subListWidget);
@@ -285,84 +266,42 @@ void SubscriptionsPage::setupUI()
     pageL->addWidget(scroll);
 }
 
-// void SubscriptionsPage::refreshData()
-// {
-//     while (QLayoutItem *item = m_subListLayout->takeAt(0)) {
-//         if (item->widget()) delete item->widget();
-//         delete item;
-//     }
-
-//     QVector<Suscripcion> subs = DataManager::instance().getSuscripciones();
-
-//     double total = 0;
-//     for (const Suscripcion &s : subs) {
-//         if (s.activa) total += s.monto;
-//         addSubCard(s);
-//     }
-
-//     m_countLabel->setText(QString("%1 suscripciones").arg(subs.size()));
-//     m_totalLabel->setText(QString("Total activas: $%1/mes").arg(total, 0, 'f', 0));
-// }
 void SubscriptionsPage::refreshData()
 {
     while (QLayoutItem *item = m_subListLayout->takeAt(0)) {
-
         if (item->widget()) {
             item->widget()->deleteLater();
         }
-
         delete item;
     }
 
-    QVector<Suscripcion> subs =
-        DataManager::instance().getSuscripciones();
+    QVector<Suscripcion> subs = DataManager::instance().getSuscripciones();
 
     double total = 0;
-
     for (const Suscripcion &s : subs) {
-
-        if (s.activa)
-            total += s.monto;
-
+        if (s.activa) total += s.monto;
         addSubCard(s);
     }
 
-    m_countLabel->setText(
-        QString("%1 suscripciones").arg(subs.size())
-        );
-
-    m_totalLabel->setText(
-        QString("Total activas: $%1/mes")
-            .arg(total, 0, 'f', 0)
-        );
+    m_countLabel->setText(QString("%1 suscripciones").arg(subs.size()));
+    m_totalLabel->setText(QString("Total activas: $%1/mes").arg(total, 0, 'f', 0));
 }
 
 void SubscriptionsPage::addSubCard(const Suscripcion &s)
 {
     auto *card = new SubCard(s, this);
 
-    // Toggle activar/desactivar
     connect(card, &SubCard::toggleRequested, this,
             [this](int id, bool activa) {
-
                 DataManager::instance().updateSuscripcionEstado(id, activa);
-
-                // NO LLAMAR refreshData()
-                // ya lo hace la señal suscripcionesChanged
             });
 
-    // Eliminar
     connect(card, &SubCard::deleteRequested, this,
             [this](int id) {
-
                 DataManager::instance().removeSuscripcion(id);
-
-                // NO LLAMAR refreshData()
             });
 
-    // Editar
-    connect(card, &SubCard::editRequested,
-            this, &SubscriptionsPage::onEditClicked);
+    connect(card, &SubCard::editRequested, this, &SubscriptionsPage::onEditClicked);
 
     m_subListLayout->addWidget(card);
 }
@@ -373,10 +312,8 @@ void SubscriptionsPage::onAddClicked()
     dlg.exec();
 }
 
-// ── Dialog de edición inline ────────────────────────────────────
 void SubscriptionsPage::onEditClicked(int id)
 {
-    // Buscar la suscripción actual por id
     QVector<Suscripcion> subs = DataManager::instance().getSuscripciones();
     Suscripcion actual;
     bool encontrada = false;
@@ -385,7 +322,6 @@ void SubscriptionsPage::onEditClicked(int id)
     }
     if (!encontrada) return;
 
-    // Construir dialog con estilo AlcancIA
     QDialog dlg(this);
     dlg.setWindowTitle("Editar Suscripción");
     dlg.setModal(true);
@@ -437,7 +373,6 @@ void SubscriptionsPage::onEditClicked(int id)
     sep->setStyleSheet("background-color: #2E3347; border: none;");
     mainL->addWidget(sep);
 
-    // Campos del formulario
     QWidget *formW = new QWidget();
     formW->setStyleSheet("background: transparent;");
     QGridLayout *formL = new QGridLayout(formW);
@@ -484,7 +419,6 @@ void SubscriptionsPage::onEditClicked(int id)
 
     mainL->addStretch();
 
-    // Botones
     QWidget *btnW = new QWidget();
     btnW->setStyleSheet("background: transparent;");
     QHBoxLayout *btnL = new QHBoxLayout(btnW);
@@ -523,7 +457,6 @@ void SubscriptionsPage::onEditClicked(int id)
 
     if (dlg.exec() != QDialog::Accepted) return;
 
-    // Armar suscripción editada y llamar al DataManager
     Suscripcion editada  = actual;
     editada.nombreServicio  = nombreEdit->text().trimmed();
     editada.monto           = montoSpin->value();
@@ -536,5 +469,4 @@ void SubscriptionsPage::onEditClicked(int id)
         QMessageBox::critical(this, "Error", "No se pudo guardar el cambio.");
         return;
     }
-    // refreshData() se dispara automáticamente via suscripcionesChanged()
 }

@@ -122,7 +122,6 @@ void BarChart::paintEvent(QPaintEvent *) {
 ReportsPage::ReportsPage(QWidget *parent) : QWidget(parent) {
     setStyleSheet("background: transparent;");
 
-    // Conectar ANTES de setupUI/refreshData para no perderse ninguna señal
     connect(&DataManager::instance(), &DataManager::sincronizacionCompletada,
             this, &ReportsPage::refreshData);
     connect(&DataManager::instance(), &DataManager::ticketsChanged,
@@ -146,7 +145,7 @@ void ReportsPage::setupUI() {
     mainL->setContentsMargins(32, 28, 32, 32);
     mainL->setSpacing(24);
 
-    // ── Header ────────────────────────────────────────────────────
+    // Header
     QWidget *headerW = new QWidget();
     headerW->setStyleSheet("background: transparent;");
     QHBoxLayout *headerL = new QHBoxLayout(headerW);
@@ -165,24 +164,13 @@ void ReportsPage::setupUI() {
     titleL->addWidget(title);
     titleL->addWidget(sub);
 
-    QPushButton *exportBtn = new QPushButton("📥  Exportar");
-    exportBtn->setFixedHeight(38);
-    exportBtn->setCursor(Qt::PointingHandCursor);
-    exportBtn->setStyleSheet(R"(
-        QPushButton {
-            background: transparent; color: #94A3B8;
-            border: 1px solid #2E3347; border-radius: 8px;
-            padding: 0 16px; font-size: 12px;
-        }
-        QPushButton:hover { border-color: #4ADE80; color: #4ADE80; }
-    )");
-
     headerL->addWidget(titleW);
     headerL->addStretch();
-    headerL->addWidget(exportBtn);
+    // Botón Exportar ELIMINADO
+
     mainL->addWidget(headerW);
 
-    // ── Summary cards ─────────────────────────────────────────────
+    // Summary cards
     QWidget *cardsW = new QWidget();
     cardsW->setStyleSheet("background: transparent;");
     m_summaryLayout = new QHBoxLayout(cardsW);
@@ -190,7 +178,7 @@ void ReportsPage::setupUI() {
     m_summaryLayout->setSpacing(14);
     mainL->addWidget(cardsW);
 
-    // ── Mid section ───────────────────────────────────────────────
+    // Mid section
     QWidget *midW = new QWidget();
     midW->setStyleSheet("background: transparent;");
     QHBoxLayout *midL = new QHBoxLayout(midW);
@@ -239,8 +227,6 @@ void ReportsPage::refreshData() {
     int year  = now.year();
     int month = now.month();
 
-    // Mismo método que DashboardPage: iterar getTickets() para garantizar
-    // que ambas páginas muestren exactamente los mismos totales
     QVector<Ticket> tickets = DataManager::instance().getTickets();
 
     double gastoMes = 0.0;
@@ -262,7 +248,6 @@ void ReportsPage::refreshData() {
 
     double promedio = (ticketCount > 0) ? gastoMes / ticketCount : 0;
 
-    // ── Summary cards (sin bordes) ────────────────────────────────
     struct Card { QString icon, label, val, sub, color; };
     QVector<Card> cards = {
                            {"💸", "TOTAL GASTADO",  QString("$%1").arg(gastoMes, 0, 'f', 0),          "este mes",    "#4ADE80"},
@@ -273,24 +258,18 @@ void ReportsPage::refreshData() {
 
     for (auto &c : cards) {
         QFrame *card = new QFrame();
-        // ← sin border
-        card->setStyleSheet(
-            "QFrame { background-color: #1A1D27; border: none; border-radius: 12px; }"
-            );
+        card->setStyleSheet("QFrame { background-color: #1A1D27; border: none; border-radius: 12px; }");
         card->setFixedHeight(90);
         QVBoxLayout *l = new QVBoxLayout(card);
         l->setContentsMargins(16, 12, 16, 12);
         l->setSpacing(3);
 
         QLabel *iconL = new QLabel(c.icon + "  " + c.label);
-        iconL->setStyleSheet("color: #64748B; font-size: 11px; font-weight: 600; "
-                             "background: transparent; border: none;");
+        iconL->setStyleSheet("color: #64748B; font-size: 11px; font-weight: 600; background: transparent; border: none;");
         QLabel *valL = new QLabel(c.val);
-        valL->setStyleSheet(QString("color: %1; font-size: 20px; font-weight: 700; "
-                                    "background: transparent; border: none;").arg(c.color));
+        valL->setStyleSheet(QString("color: %1; font-size: 20px; font-weight: 700; background: transparent; border: none;").arg(c.color));
         QLabel *subL = new QLabel(c.sub);
-        subL->setStyleSheet("color: #475569; font-size: 11px; "
-                            "background: transparent; border: none;");
+        subL->setStyleSheet("color: #475569; font-size: 11px; background: transparent; border: none;");
 
         l->addWidget(iconL);
         l->addWidget(valL);
@@ -298,7 +277,7 @@ void ReportsPage::refreshData() {
         m_summaryLayout->addWidget(card);
     }
 
-    // ── Bar chart — calculado desde los tickets ya cargados ───────
+    // Bar chart
     QMap<int, double> semanasMap;
     for (const Ticket &t : tickets) {
         if (t.fecha.year() == year && t.fecha.month() == month) {
@@ -315,14 +294,11 @@ void ReportsPage::refreshData() {
     maxSem = qMax(maxSem, 1.0);
 
     QLabel *chartTitle = new QLabel("Gastos por Semana");
-    chartTitle->setStyleSheet("color: #F1F5F9; font-size: 16px; font-weight: 700; "
-                              "background: transparent; border: none;");
+    chartTitle->setStyleSheet("color: #F1F5F9; font-size: 16px; font-weight: 700; background: transparent; border: none;");
     m_chartLayout->addWidget(chartTitle);
 
     QFrame *chartCard = new QFrame();
-    chartCard->setStyleSheet(
-        "QFrame { background-color: #1A1D27; border: none; border-radius: 14px; }"
-        );
+    chartCard->setStyleSheet("QFrame { background-color: #1A1D27; border: none; border-radius: 14px; }");
     QVBoxLayout *cardL = new QVBoxLayout(chartCard);
     cardL->setContentsMargins(20, 16, 20, 16);
     BarChart *chart = new BarChart();
@@ -330,25 +306,22 @@ void ReportsPage::refreshData() {
     cardL->addWidget(chart);
     m_chartLayout->addWidget(chartCard);
 
-    // ── Category breakdown ────────────────────────────────────────
+    // Category breakdown
     QLabel *breakTitle = new QLabel("Por Categoría");
-    breakTitle->setStyleSheet("color: #F1F5F9; font-size: 16px; font-weight: 700; "
-                              "background: transparent; border: none;");
+    breakTitle->setStyleSheet("color: #F1F5F9; font-size: 16px; font-weight: 700; background: transparent; border: none;");
     m_breakdownLayout->addWidget(breakTitle);
 
     QFrame *breakCard = new QFrame();
-    breakCard->setStyleSheet(
-        "QFrame { background-color: #1A1D27; border: none; border-radius: 14px; }"
-        );
+    breakCard->setStyleSheet("QFrame { background-color: #1A1D27; border: none; border-radius: 14px; }");
     QVBoxLayout *breakCardL = new QVBoxLayout(breakCard);
     breakCardL->setContentsMargins(16, 16, 16, 16);
     breakCardL->setSpacing(6);
 
-    // ── Category breakdown — calculado desde los tickets ya cargados ─
     QMap<QString, double> catsMap;
     for (const Ticket &t : tickets) {
         if (t.fecha.year() == year && t.fecha.month() == month) {
-            catsMap[t.categoria.isEmpty() ? "Otro" : t.categoria] += t.monto;
+            QString cat = t.categoria.isEmpty() ? "Otro" : t.categoria;
+            catsMap[cat] += t.monto;
         }
     }
     QVector<QPair<QString,double>> cats;
@@ -393,26 +366,8 @@ void ReportsPage::refreshData() {
     m_breakdownLayout->addWidget(breakCard);
     m_breakdownLayout->addStretch();
 }
-// ─────────────────────────────────────────
-// metodos declarados en el .h pero que refreshData() ya implementa inline.
-// se definen vacios para que el linker no falle.
-// todo el trabajo real lo hace refreshData() directamente.
-// ─────────────────────────────────────────
 
-void ReportsPage::buildSummaryCards(QHBoxLayout *layout)
-{
-    Q_UNUSED(layout);
-    // implementacion inline en refreshData()
-}
-
-void ReportsPage::buildBarChart(QVBoxLayout *layout)
-{
-    Q_UNUSED(layout);
-    // implementacion inline en refreshData()
-}
-
-void ReportsPage::buildCategoryBreakdown(QVBoxLayout *layout)
-{
-    Q_UNUSED(layout);
-    // implementacion inline en refreshData()
-}
+// Métodos vacíos (ya no se usan, pero mantenidos para compatibilidad)
+void ReportsPage::buildSummaryCards(QHBoxLayout *layout) { Q_UNUSED(layout); }
+void ReportsPage::buildBarChart(QVBoxLayout *layout) { Q_UNUSED(layout); }
+void ReportsPage::buildCategoryBreakdown(QVBoxLayout *layout) { Q_UNUSED(layout); }

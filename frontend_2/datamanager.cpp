@@ -1,30 +1,22 @@
-// ============================
-// datamanager.cpp
-// ============================
-
 #include "datamanager.h"
 
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonObject>
-
 #include <QDebug>
 #include <QMap>
-#include <QSettings>// añado para recordar usuario
-
-
+#include <QSettings>
 #include <QFile>
 #include <QFileInfo>
-
 #include <QSqlQuery>
 #include <QSqlError>
-
 #include <QtNetwork/QHttpMultiPart>
 #include <QtNetwork/QHttpPart>
 #include <QtNetwork/QNetworkRequest>
 #include <QtNetwork/QNetworkReply>
-
 #include <QUrl>
+#include <QEventLoop>
+#include <QTimer>
 
 // ─────────────────────────────────────────
 // CONSTRUCTOR
@@ -33,20 +25,11 @@
 DataManager::DataManager()
     : QObject(nullptr)
 {
-    networkManager =
-        new QNetworkAccessManager(this);
+    networkManager = new QNetworkAccessManager(this);
+    connect(networkManager, &QNetworkAccessManager::finished,
+            this, &DataManager::onRespuestaRecibida);
 
-    connect(
-        networkManager,
-        &QNetworkAccessManager::finished,
-        this,
-        &DataManager::onRespuestaRecibida
-        );
-
-    QString rutaDB =
-        QFileInfo(__FILE__).absolutePath()
-        + "/tasty_alcancia.db";
-
+    QString rutaDB = QFileInfo(__FILE__).absolutePath() + "/tasty_alcancia.db";
     m_db.conectar(rutaDB);
 }
 
@@ -64,25 +47,16 @@ DataManager& DataManager::instance()
 // HASH PASSWORD
 // ─────────────────────────────────────────
 
-QString DataManager::hashPassword(
-    const QString& pwd
-    ) const
+QString DataManager::hashPassword(const QString& pwd) const
 {
-    return QString(
-        QCryptographicHash::hash(
-            pwd.toUtf8(),
-            QCryptographicHash::Md5
-            ).toHex()
-        );
+    return QString(QCryptographicHash::hash(pwd.toUtf8(), QCryptographicHash::Md5).toHex());
 }
 
 // ─────────────────────────────────────────
 // CAMBIO ESTADO RED
 // ─────────────────────────────────────────
 
-void DataManager::cambiarEstadoRed(
-    EstadoRed nuevoEstado
-    )
+void DataManager::cambiarEstadoRed(EstadoRed nuevoEstado)
 {
     estadoActual = nuevoEstado;
     emit estadoRedCambiado(estadoActual);
@@ -95,17 +69,14 @@ void DataManager::cambiarEstadoRed(
 int DataManager::getUsuarioActivoId()
 {
     QSqlQuery query(m_db.getDB());
-
     query.prepare(R"(
         SELECT id_usuario_remoto
         FROM usuario_sesion
         WHERE sesion_activa = 1
         LIMIT 1
     )");
-
     if (query.exec() && query.next())
         return query.value(0).toInt();
-
     return -1;
 }
 
@@ -113,26 +84,15 @@ int DataManager::getUsuarioActivoId()
 // LOGIN REAL CONTRA EL VPS
 // ─────────────────────────────────────────
 
-void DataManager::loginRed(
-    const QString& email,
-    const QString& password
-    )
+void DataManager::loginRed(const QString& email, const QString& password)
 {
-    // el login real se valida en el vps, no en sqlite.
-    // sqlite solo se usa como cache offline despues de un login exitoso.
     cambiarEstadoRed(SINCRONIZANDO);
-
     QUrl url("http://161.97.92.143/api/v1/usuarios/login");
     QNetworkRequest request(url);
-    request.setHeader(
-        QNetworkRequest::ContentTypeHeader,
-        "application/json"
-        );
-
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     QJsonObject json;
-    json["email"]     = email;
+    json["email"] = email;
     json["clave_hash"] = hashPassword(password);
-
     networkManager->post(request, QJsonDocument(json).toJson());
 }
 
@@ -140,18 +100,10 @@ void DataManager::loginRed(
 // SINCRONIZACION
 // ─────────────────────────────────────────
 
-void DataManager::sincronizarDesdeServidor(
-    int id_usuario
-    )
+void DataManager::sincronizarDesdeServidor(int id_usuario)
 {
     cambiarEstadoRed(SINCRONIZANDO);
-
-    QUrl url(
-        QString(
-            "http://161.97.92.143/api/v1/usuarios/%1/sync"
-            ).arg(id_usuario)
-        );
-
+    QUrl url(QString("http://161.97.92.143/api/v1/usuarios/%1/sync").arg(id_usuario));
     QNetworkRequest request(url);
     networkManager->get(request);
 }
@@ -159,16 +111,13 @@ void DataManager::sincronizarDesdeServidor(
 void DataManager::sincronizarSuscripcionesLocales()
 {
     int usuarioId = getUsuarioActivoId();
-
-    if (usuarioId < 0)
-    {
+    if (usuarioId < 0) {
         qDebug() << "No hay usuario activo para sincronizar.";
+        emit syncSuscripcionesLocalesCompletada(false);
         return;
     }
 
     QSqlQuery query(m_db.getDB());
-
-    // CAMBIO NUEVO - buscar cambios locales pendientes
     query.prepare(R"(
         SELECT id_suscripcion_remota,
                id_categoria_remota,
@@ -183,27 +132,18 @@ void DataManager::sincronizarSuscripcionesLocales()
                accion_pendiente
         FROM suscripciones
         WHERE id_usuario_remoto = :uid
-        AND (
-            sincronizado = 0
-            OR accion_pendiente != 'ninguna'
-        )
+        AND (sincronizado = 0 OR accion_pendiente != 'ninguna')
     )");
-
     query.bindValue(":uid", usuarioId);
-
-    if (!query.exec())
-    {
-        qDebug() << "Error buscando suscripciones pendientes:"
-                 << query.lastError().text();
+    if (!query.exec()) {
+        qDebug() << "Error buscando suscripciones pendientes:" << query.lastError().text();
+        emit syncSuscripcionesLocalesCompletada(false);
         return;
     }
 
     QJsonArray subsArray;
-
-    while (query.next())
-    {
+    while (query.next()) {
         QJsonObject subJson;
-
         subJson["id_suscripcion_remota"] = query.value("id_suscripcion_remota").toInt();
         subJson["id_categoria_remota"] = query.value("id_categoria_remota").toInt();
         subJson["nombre"] = query.value("nombre").toString();
@@ -215,42 +155,88 @@ void DataManager::sincronizarSuscripcionesLocales()
         subJson["actividad"] = query.value("actividad").toInt();
         subJson["notas"] = query.value("notas").toString();
         subJson["accion_pendiente"] = query.value("accion_pendiente").toString();
-
         subsArray.append(subJson);
     }
 
-    if (subsArray.isEmpty())
-    {
+    if (subsArray.isEmpty()) {
         qDebug() << "No hay suscripciones pendientes para sincronizar.";
+        emit syncSuscripcionesLocalesCompletada(true);
         return;
     }
 
     cambiarEstadoRed(SINCRONIZANDO);
-
     QUrl url("http://161.97.92.143/api/v1/suscripciones/sync");
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-
     QJsonObject jsonRaiz;
     jsonRaiz["id_usuario"] = usuarioId;
     jsonRaiz["suscripciones"] = subsArray;
-
     networkManager->post(request, QJsonDocument(jsonRaiz).toJson());
+}
+
+// ─────────────────────────────────────────
+// VERIFICAR SI HAY CAMBIOS PENDIENTES (PRIVADO)
+// ─────────────────────────────────────────
+
+bool DataManager::haySuscripcionesPendientes()
+{
+    int usuarioId = getUsuarioActivoId();
+    if (usuarioId < 0) return false;
+    QSqlQuery query(m_db.getDB());
+    query.prepare(R"(
+        SELECT COUNT(*)
+        FROM suscripciones
+        WHERE id_usuario_remoto = :uid
+        AND (sincronizado = 0 OR accion_pendiente != 'ninguna')
+    )");
+    query.bindValue(":uid", usuarioId);
+    if (query.exec() && query.next()) {
+        return query.value(0).toInt() > 0;
+    }
+    return false;
+}
+
+// ─────────────────────────────────────────
+// ESPERA SÍNCRONA PARA CIERRE DE APP (CORREGIDO)
+// ─────────────────────────────────────────
+
+bool DataManager::syncSuscripcionesLocalesAndWait(int timeoutMs)
+{
+    // Si no hay cambios pendientes, salimos inmediatamente
+    if (!haySuscripcionesPendientes()) {
+        qDebug() << "No hay cambios pendientes, omitiendo sincronización.";
+        return true;
+    }
+
+    QEventLoop loop;
+    bool finished = false;
+    bool success = false;
+    connect(this, &DataManager::syncSuscripcionesLocalesCompletada,
+            [&](bool exito) {
+                success = exito;
+                finished = true;
+                loop.quit();
+            });
+    sincronizarSuscripcionesLocales();
+    QTimer::singleShot(timeoutMs, &loop, [&]() {
+        if (!finished) {
+            finished = true;
+            success = false;
+            loop.quit();
+        }
+    });
+    loop.exec();
+    return success;
 }
 
 // ─────────────────────────────────────────
 // RESPUESTAS RED
 // ─────────────────────────────────────────
 
-void DataManager::onRespuestaRecibida(
-    QNetworkReply *reply
-    )
+void DataManager::onRespuestaRecibida(QNetworkReply *reply)
 {
-    if (reply->error() != QNetworkReply::NoError)
-    {
-        emit errorDeRed(
-            "Error de red: " + reply->errorString()
-            );
+    if (reply->error() != QNetworkReply::NoError) {
+        emit errorDeRed("Error de red: " + reply->errorString());
         cambiarEstadoRed(ERROR_CONEXION);
         reply->deleteLater();
         return;
@@ -259,109 +245,60 @@ void DataManager::onRespuestaRecibida(
     QByteArray responseData = reply->readAll();
     QString path = reply->url().path();
     qDebug() << "URL:" << path;
-    qDebug() << "RESPUESTA:";
-    qDebug() << responseData;
-
-    qDebug() << "JSON VPS:";
-    qDebug().noquote() << responseData;
+    qDebug() << "RESPUESTA:" << responseData;
 
     // ─── LOGIN ───────────────────────────────────
-    if (path.contains("/login"))
-    {
-        QJsonObject root =
-            QJsonDocument::fromJson(responseData).object();
+    if (path.contains("/login")) {
+        QJsonObject root = QJsonDocument::fromJson(responseData).object();
+        if (root["status"].toString() == "ok") {
+            QJsonObject usuario = root["usuario"].toObject();
+            int idUsuario = usuario["id_usuario"].toInt();
+            QString nombre = usuario["nombre"].toString();
+            qDebug() << "Login VPS OK. usuario:" << nombre << "id:" << idUsuario;
 
-        if (root["status"].toString() == "ok")
-        {
-            QJsonObject usuario =
-                root["usuario"].toObject();
-
-            int idUsuario =
-                usuario["id_usuario"].toInt();
-
-            QString nombre =
-                usuario["nombre"].toString();
-
-            qDebug() << "Login VPS OK. usuario:" << nombre
-                     << "id:" << idUsuario;
-
-            // guardar sesion local
             QSqlQuery query(m_db.getDB());
-
             query.prepare(R"(
-        INSERT OR REPLACE INTO usuario_sesion
-        (
-            id_usuario_remoto,
-            nombre,
-            sesion_activa
-        )
-        VALUES
-        (
-            :id,
-            :nombre,
-            1
-        )
-    )");
-
+                INSERT OR REPLACE INTO usuario_sesion
+                (id_usuario_remoto, nombre, sesion_activa)
+                VALUES (:id, :nombre, 1)
+            )");
             query.bindValue(":id", idUsuario);
             query.bindValue(":nombre", nombre);
-
             if (!query.exec())
-            {
-                qDebug() << "Error guardando sesion:"
-                         << query.lastError().text();
-            }
+                qDebug() << "Error guardando sesion:" << query.lastError().text();
 
             m_pendingUserId   = idUsuario;
             m_pendingUsername = nombre;
-
             sincronizarDesdeServidor(idUsuario);
-
             emit loginExitoso(idUsuario, nombre);
-        }
-        else
-        {
+        } else {
             emit loginFallido(root["message"].toString());
             cambiarEstadoRed(ERROR_CONEXION);
         }
     }
-
-    else if (path.contains("/suscripciones/sync"))
-    {
+    // ─── SINCRONIZACIÓN DE SUSCRIPCIONES LOCALES ───
+    else if (path.contains("/suscripciones/sync")) {
         QJsonObject root = QJsonDocument::fromJson(responseData).object();
-
-        if (root["status"].toString() == "ok")
-        {
+        if (root["status"].toString() == "ok") {
             qDebug() << "Cambios locales de suscripciones sincronizados con VPS.";
-
             int idUsuario = getUsuarioActivoId();
-
-            if (idUsuario > 0)
-            {
+            if (idUsuario > 0) {
                 sincronizarDesdeServidor(idUsuario);
             }
-        }
-        else
-        {
-            emit errorDeRed("Error sincronizando suscripciones: "
-                            + root["message"].toString());
+            emit syncSuscripcionesLocalesCompletada(true);
+        } else {
+            emit errorDeRed("Error sincronizando suscripciones: " + root["message"].toString());
+            emit syncSuscripcionesLocalesCompletada(false);
             cambiarEstadoRed(ERROR_CONEXION);
         }
     }
-
-    // ─── SYNC ────────────────────────────────────
-    else if (path.contains("/sync"))
-    {
-        if (m_db.sincronizarDesdeJson(responseData))
-        {
+    // ─── SYNC GENERAL ───────────────────────────
+    else if (path.contains("/sync")) {
+        if (m_db.sincronizarDesdeJson(responseData)) {
             qDebug() << "Llamando renovarSuscripcionesVencidas...";
             m_db.renovarSuscripcionesVencidas();
-
-            // NUEVO: revisa las suscripciones sincronizadas y genera avisos de vencimiento
             m_db.generarNotificacionesVencimiento();
-
             cargarNotificacionesDesdeSQLite();
-
             qDebug() << "Sincronizacion OK";
             emit sincronizacionCompletada();
             emit ticketsChanged();
@@ -369,62 +306,37 @@ void DataManager::onRespuestaRecibida(
         }
         cambiarEstadoRed(EXITO);
     }
-
     // ─── ANALIZAR IA ─────────────────────────────
-    else if (path.contains("/analizar"))
-    {
-        QJsonObject root =
-            QJsonDocument::fromJson(responseData).object();
-        QJsonObject gastoObj = root["gasto"].toObject();
-        emit ticketProcesadoRed(
-            gastoObj["comercio"].toString(),
-            gastoObj["monto"].toDouble(),
-            gastoObj["fecha_gasto"].toString(),
-            gastoObj["categoria_sugerida"].toString(),
-            root
-            );
-        cambiarEstadoRed(EXITO);
-    }
-
-    // ─── GUARDAR TICKET ──────────────────────────
-    else if (path.contains("/tickets/guardar"))
-    {
-        QJsonObject root =
-            QJsonDocument::fromJson(responseData).object();
-        emit ticketGuardadoServidor(
-            root["status"].toString() == "ok",
-            root["message"].toString()
-            );
-        cambiarEstadoRed(EXITO);
-    }
-
-    // ─── GUARDAR SUSCRIPCION ─────────────────────
-    else if (path.contains("/suscripciones/guardar"))
-    {
+    else if (path.contains("/analizar")) {
         QJsonObject root = QJsonDocument::fromJson(responseData).object();
-
-        qDebug() << "RESPUESTA SUSCRIPCION:";
-        qDebug() << root;
-
-        // --- CORRECCIÓN: Sincronizar después de guardar ---
+        QJsonObject gastoObj = root["gasto"].toObject();
+        emit ticketProcesadoRed(gastoObj["comercio"].toString(),
+                                gastoObj["monto"].toDouble(),
+                                gastoObj["fecha_gasto"].toString(),
+                                gastoObj["categoria_sugerida"].toString(),
+                                root);
+        cambiarEstadoRed(EXITO);
+    }
+    // ─── GUARDAR TICKET ─────────────────────────
+    else if (path.contains("/tickets/guardar")) {
+        QJsonObject root = QJsonDocument::fromJson(responseData).object();
+        emit ticketGuardadoServidor(root["status"].toString() == "ok", root["message"].toString());
+        cambiarEstadoRed(EXITO);
+    }
+    // ─── GUARDAR SUSCRIPCION ─────────────────────
+    else if (path.contains("/suscripciones/guardar")) {
+        QJsonObject root = QJsonDocument::fromJson(responseData).object();
+        qDebug() << "RESPUESTA SUSCRIPCION:" << root;
         int idUsuario = getUsuarioActivoId();
         if (idUsuario > 0) {
             sincronizarDesdeServidor(idUsuario);
         }
-        // --------------------------------------------------
-
         cambiarEstadoRed(EXITO);
     }
-
     // ─── REGISTRO ────────────────────────────────
-    else if (path.contains("/registro"))
-    {
-        QJsonObject root =
-            QJsonDocument::fromJson(responseData).object();
-        emit usuarioRegistradoServidor(
-            root["status"].toString() == "ok",
-            root["message"].toString()
-            );
+    else if (path.contains("/registro")) {
+        QJsonObject root = QJsonDocument::fromJson(responseData).object();
+        emit usuarioRegistradoServidor(root["status"].toString() == "ok", root["message"].toString());
         cambiarEstadoRed(EXITO);
     }
 
@@ -435,40 +347,23 @@ void DataManager::onRespuestaRecibida(
 // ANALIZAR TICKET IA
 // ─────────────────────────────────────────
 
-void DataManager::analizarTicketRed(
-    const QString& rutaImagen
-    )
+void DataManager::analizarTicketRed(const QString& rutaImagen)
 {
     cambiarEstadoRed(ENVIANDO_FOTO);
-
-    QHttpMultiPart *multiPart =
-        new QHttpMultiPart(QHttpMultiPart::FormDataType);
-
+    QHttpMultiPart *multiPart = new QHttpMultiPart(QHttpMultiPart::FormDataType);
     QHttpPart imagePart;
 
-    // ─── NUEVA IMPLEMENTACIÓN: Detección de PDF ───
     QString mimeType = "image/jpeg";
     if (rutaImagen.endsWith(".pdf", Qt::CaseInsensitive)) {
         mimeType = "application/pdf";
     }
 
-    imagePart.setHeader(
-        QNetworkRequest::ContentTypeHeader,
-        QVariant(mimeType)
-        );
-    // ──────────────────────────────────────────────
-
-    imagePart.setHeader(
-        QNetworkRequest::ContentDispositionHeader,
-        QVariant(
-            "form-data; name=\"file\"; filename=\""
-            + QFileInfo(rutaImagen).fileName() + "\""
-            )
-        );
+    imagePart.setHeader(QNetworkRequest::ContentTypeHeader, QVariant(mimeType));
+    imagePart.setHeader(QNetworkRequest::ContentDispositionHeader,
+                        QVariant("form-data; name=\"file\"; filename=\"" + QFileInfo(rutaImagen).fileName() + "\""));
 
     QFile *file = new QFile(rutaImagen);
-    if (!file->open(QIODevice::ReadOnly))
-    {
+    if (!file->open(QIODevice::ReadOnly)) {
         emit errorDeRed("Error abriendo el archivo.");
         delete file;
         delete multiPart;
@@ -490,19 +385,12 @@ void DataManager::analizarTicketRed(
 // GUARDAR TICKET SERVIDOR
 // ─────────────────────────────────────────
 
-void DataManager::guardarTicketCompletoServidor(
-    const QJsonObject& jsonCompleto
-    )
+void DataManager::guardarTicketCompletoServidor(const QJsonObject& jsonCompleto)
 {
     cambiarEstadoRed(SINCRONIZANDO);
-
     QUrl url("http://161.97.92.143/api/v1/tickets/guardar");
     QNetworkRequest request(url);
-    request.setHeader(
-        QNetworkRequest::ContentTypeHeader,
-        "application/json"
-        );
-
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     networkManager->post(request, QJsonDocument(jsonCompleto).toJson());
 }
 
@@ -510,24 +398,15 @@ void DataManager::guardarTicketCompletoServidor(
 // REGISTRO USUARIO
 // ─────────────────────────────────────────
 
-void DataManager::registrarUsuarioRed(
-    const QString& username,
-    const QString& email,
-    const QString& password
-    )
+void DataManager::registrarUsuarioRed(const QString& username, const QString& email, const QString& password)
 {
     QUrl url("http://161.97.92.143/api/v1/usuarios/registro");
     QNetworkRequest request(url);
-    request.setHeader(
-        QNetworkRequest::ContentTypeHeader,
-        "application/json"
-        );
-
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     QJsonObject json;
-    json["nombre"]     = username;
-    json["email"]      = email;
+    json["nombre"] = username;
+    json["email"] = email;
     json["clave_hash"] = hashPassword(password);
-
     networkManager->post(request, QJsonDocument(json).toJson());
 }
 
@@ -535,33 +414,20 @@ void DataManager::registrarUsuarioRed(
 // GUARDAR SUSCRIPCION SERVIDOR
 // ─────────────────────────────────────────
 
-void DataManager::guardarSuscripcionRed(
-    const Suscripcion& s
-    )
+void DataManager::guardarSuscripcionRed(const Suscripcion& s)
 {
     cambiarEstadoRed(SINCRONIZANDO);
-
     int usuarioId = getUsuarioActivoId();
-
-    if (usuarioId < 0)
-    {
+    if (usuarioId < 0) {
         qDebug() << "Usuario invalido";
         return;
     }
 
-    QUrl url(
-        "http://161.97.92.143/api/v1/suscripciones/guardar"
-        );
-
+    QUrl url("http://161.97.92.143/api/v1/suscripciones/guardar");
     QNetworkRequest request(url);
-
-    request.setHeader(
-        QNetworkRequest::ContentTypeHeader,
-        "application/json"
-        );
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
     QJsonObject json;
-
     json["id_usuario"]   = usuarioId;
     json["id_categoria"] = 1;
     json["nombre"]       = s.nombreServicio;
@@ -573,31 +439,21 @@ void DataManager::guardarSuscripcionRed(
     json["actividad"]    = s.activa ? 1 : 0;
     json["notas"]        = "";
 
-    qDebug() << "ENVIANDO SUSCRIPCION:";
-    qDebug() << QJsonDocument(json).toJson(QJsonDocument::Indented);
-
-    networkManager->post(
-        request,
-        QJsonDocument(json).toJson()
-        );
+    qDebug() << "ENVIANDO SUSCRIPCION:" << QJsonDocument(json).toJson(QJsonDocument::Indented);
+    networkManager->post(request, QJsonDocument(json).toJson());
 }
 
 // ─────────────────────────────────────────
 // TICKETS
 // ─────────────────────────────────────────
 
-QVector<Ticket> DataManager::getTickets(
-    const QString& categoriaFiltro,
-    const QString& busqueda
-    )
+QVector<Ticket> DataManager::getTickets(const QString& categoriaFiltro, const QString& busqueda)
 {
     QVector<Ticket> tickets;
-
     int usuarioId = getUsuarioActivoId();
     if (usuarioId < 0) return tickets;
 
     QSqlQuery query(m_db.getDB());
-
     query.prepare(R"(
         SELECT
             g.id_gasto,
@@ -607,107 +463,80 @@ QVector<Ticket> DataManager::getTickets(
             c.nombre AS categoria,
             g.notas
         FROM gastos g
-        LEFT JOIN categorias c
-            ON g.id_categoria = c.id_categoria
+        LEFT JOIN categorias c ON g.id_categoria = c.id_categoria
         WHERE g.id_usuario = :uid
         ORDER BY g.fecha_gasto DESC
     )");
-
     query.bindValue(":uid", usuarioId);
-
-    if (!query.exec())
-    {
+    if (!query.exec()) {
         qDebug() << "Error getTickets:" << query.lastError().text();
         return tickets;
     }
 
-    while (query.next())
-    {
+    while (query.next()) {
         Ticket t;
         t.id          = query.value("id_gasto").toInt();
         t.nombreLocal = query.value("comercio").toString();
         t.monto       = query.value("monto").toDouble();
-        t.fecha       = QDate::fromString(
-            query.value("fecha_gasto").toString(), Qt::ISODate
-            );
-        t.categoria      = query.value("categoria").toString();
+        t.fecha       = QDate::fromString(query.value("fecha_gasto").toString(), Qt::ISODate);
+        t.categoria   = query.value("categoria").toString();
         t.procesadoPorIA = false;
-        t.imagenPath     = "";
+        t.imagenPath  = "";
 
-        bool coincideCategoria =
-            categoriaFiltro.isEmpty()
-            || categoriaFiltro == "Todas las categorias"
-            || t.categoria.contains(categoriaFiltro, Qt::CaseInsensitive);
-
-        bool coincideBusqueda =
-            busqueda.isEmpty()
-            || t.nombreLocal.contains(busqueda, Qt::CaseInsensitive);
+        bool coincideCategoria = categoriaFiltro.isEmpty()
+                                 || categoriaFiltro == "Todas las categorías"
+                                 || t.categoria.contains(categoriaFiltro, Qt::CaseInsensitive);
+        bool coincideBusqueda = busqueda.isEmpty()
+                                || t.nombreLocal.contains(busqueda, Qt::CaseInsensitive);
 
         if (coincideCategoria && coincideBusqueda)
             tickets.append(t);
     }
-
     return tickets;
 }
 
 bool DataManager::addTicket(const Ticket& t)
 {
     int usuarioId = getUsuarioActivoId();
-    if (usuarioId < 0)
-    {
+    if (usuarioId < 0) {
         qDebug() << "No hay usuario activo.";
         return false;
     }
 
     QSqlQuery query(m_db.getDB());
-
     query.prepare(R"(
-    INSERT INTO gastos
-    (id_usuario, comercio, monto, fecha_gasto, notas)
-    VALUES (:uid, :comercio, :monto, :fecha, :notas)
-)");
-
+        INSERT INTO gastos
+        (id_usuario, comercio, monto, fecha_gasto, notas)
+        VALUES (:uid, :comercio, :monto, :fecha, :notas)
+    )");
     query.bindValue(":uid",      usuarioId);
     query.bindValue(":comercio", t.nombreLocal);
     query.bindValue(":monto",    t.monto);
     query.bindValue(":fecha",    t.fecha.toString(Qt::ISODate));
     query.bindValue(":notas",    t.categoria);
 
-    if (!query.exec())
-    {
-        qDebug() << "Error insertando ticket:"
-                 << query.lastError().text();
+    if (!query.exec()) {
+        qDebug() << "Error insertando ticket:" << query.lastError().text();
         return false;
     }
 
-    // --- ARMADO DEL JSON PARA EL VPS ---
     QJsonObject jsonRaiz;
     jsonRaiz.insert("id_usuario", usuarioId);
-
-    // 1. Creamos el sub-objeto "gasto"
     QJsonObject gastoObj;
     gastoObj.insert("comercio", t.nombreLocal);
     gastoObj.insert("monto", t.monto);
     gastoObj.insert("fecha_gasto", t.fecha.toString(Qt::ISODate));
     gastoObj.insert("categoria_sugerida", t.categoria);
     gastoObj.insert("notas", "Generado localmente");
-
-    // Lo metemos en la raíz
     jsonRaiz.insert("gasto", gastoObj);
-
-    // 2. Creamos el sub-objeto "comprobante"
     QJsonObject compObj;
-    if (t.imagenPath.isEmpty()) {
+    if (t.imagenPath.isEmpty())
         compObj.insert("ruta_archivo", "carga_manual");
-    } else {
+    else
         compObj.insert("ruta_archivo", t.imagenPath);
-    }
     compObj.insert("estado", "procesado");
-
-    // Lo metemos en la raíz
     jsonRaiz.insert("comprobante", compObj);
 
-    // 3. NUEVO: ARMAMOS EL ARREGLO DE ITEMS PARA EL VPS
     if (!t.items.isEmpty()) {
         QJsonArray itemsArray;
         for (const ItemTicket& item : t.items) {
@@ -721,9 +550,7 @@ bool DataManager::addTicket(const Ticket& t)
         jsonRaiz.insert("items_gasto", itemsArray);
     }
 
-    // Enviamos al servidor
     guardarTicketCompletoServidor(jsonRaiz);
-
     emit ticketsChanged();
     return true;
 }
@@ -731,24 +558,18 @@ bool DataManager::addTicket(const Ticket& t)
 bool DataManager::removeTicket(int id)
 {
     int usuarioId = getUsuarioActivoId();
-
     QSqlQuery query(m_db.getDB());
-
     query.prepare(R"(
         DELETE FROM gastos
         WHERE id_gasto = :id
         AND id_usuario = :uid
     )");
-
     query.bindValue(":id",  id);
     query.bindValue(":uid", usuarioId);
-
-    if (!query.exec())
-    {
+    if (!query.exec()) {
         qDebug() << "Error eliminando ticket:" << query.lastError().text();
         return false;
     }
-
     emit ticketsChanged();
     return true;
 }
@@ -760,12 +581,10 @@ bool DataManager::removeTicket(int id)
 QVector<Suscripcion> DataManager::getSuscripciones()
 {
     QVector<Suscripcion> subs;
-
     int usuarioId = getUsuarioActivoId();
     if (usuarioId < 0) return subs;
 
     QSqlQuery query(m_db.getDB());
-
     query.prepare(R"(
         SELECT
             s.id_suscripcion_local AS id_suscripcion,
@@ -777,25 +596,18 @@ QVector<Suscripcion> DataManager::getSuscripciones()
             s.id_categoria_remota,
             c.nombre AS categoria
         FROM suscripciones s
-        LEFT JOIN categorias c
-            ON s.id_categoria_remota = c.id_categoria
+        LEFT JOIN categorias c ON s.id_categoria_remota = c.id_categoria
         WHERE s.id_usuario_remoto = :uid
         AND s.actividad = 1
         ORDER BY s.vencimiento ASC
     )");
-
     query.bindValue(":uid", usuarioId);
-
-    if (!query.exec())
-    {
-        qDebug() << "Error getSuscripciones:"
-                 << query.lastError().text()
-                 << query.lastQuery();
+    if (!query.exec()) {
+        qDebug() << "Error getSuscripciones:" << query.lastError().text();
         return subs;
     }
 
-    while (query.next())
-    {
+    while (query.next()) {
         Suscripcion s;
         s.id = query.value("id_suscripcion").toInt();
         s.nombreServicio = query.value("nombre").toString();
@@ -807,48 +619,34 @@ QVector<Suscripcion> DataManager::getSuscripciones()
         s.categoria = query.value("categoria").toString();
         subs.append(s);
     }
-
     return subs;
 }
 
 bool DataManager::addSuscripcion(const Suscripcion& s)
 {
     int usuarioId = getUsuarioActivoId();
-    if (usuarioId < 0)
-    {
+    if (usuarioId < 0) {
         qDebug() << "No hay usuario activo.";
         return false;
     }
-
-    // ELIMINAMOS EL INSERT EN SQLITE LOCAL.
-    // Solo enviamos la suscripción al servidor. El VPS se encargará
-    // de guardarla, y el próximo `/sync` (que disparamos en onRespuestaRecibida)
-    // la bajará a nuestra base local, evitando duplicados.
-
     guardarSuscripcionRed(s);
-
     return true;
 }
 
 bool DataManager::updateSuscripcionEstado(int id, bool activa)
 {
     QSqlQuery query(m_db.getDB());
-
     query.prepare(R"(
         UPDATE suscripciones
         SET actividad = :actividad
         WHERE id_suscripcion_local = :id
     )");
-
     query.bindValue(":actividad", activa ? 1 : 0);
     query.bindValue(":id",        id);
-
-    if (!query.exec())
-    {
+    if (!query.exec()) {
         qDebug() << query.lastError().text();
         return false;
     }
-
     emit suscripcionesChanged();
     return true;
 }
@@ -856,11 +654,7 @@ bool DataManager::updateSuscripcionEstado(int id, bool activa)
 bool DataManager::removeSuscripcion(int id)
 {
     int usuarioId = getUsuarioActivoId();
-
     QSqlQuery query(m_db.getDB());
-
-    // cambie el DELETE por UPDATE para que en vez de borrar las
-    //suscripciones de la base de datos las ponga en inactiva si la borra
     query.prepare(R"(
         UPDATE suscripciones
         SET actividad = 0,
@@ -869,16 +663,12 @@ bool DataManager::removeSuscripcion(int id)
         WHERE id_suscripcion_local = :id
         AND id_usuario_remoto = :uid
     )");
-
     query.bindValue(":id",  id);
     query.bindValue(":uid", usuarioId);
-
-    if (!query.exec())
-    {
+    if (!query.exec()) {
         qDebug() << "Error eliminando suscripcion:" << query.lastError().text();
         return false;
     }
-
     emit suscripcionesChanged();
     return true;
 }
@@ -886,21 +676,16 @@ bool DataManager::removeSuscripcion(int id)
 int DataManager::getSuscripcionesActivas()
 {
     int usuarioId = getUsuarioActivoId();
-
     QSqlQuery query(m_db.getDB());
-
     query.prepare(R"(
         SELECT COUNT(*)
         FROM suscripciones
         WHERE id_usuario_remoto = :uid
         AND actividad = 1
     )");
-
     query.bindValue(":uid", usuarioId);
-
     if (query.exec() && query.next())
         return query.value(0).toInt();
-
     return 0;
 }
 
@@ -908,83 +693,54 @@ int DataManager::getSuscripcionesActivas()
 // USUARIOS
 // ─────────────────────────────────────────
 
-bool DataManager::addUser(
-    const QString& username,
-    const QString& password
-    )
+bool DataManager::addUser(const QString& username, const QString& password)
 {
-    // guarda el hash en usuario_sesion para login offline futuro
     QSqlQuery query(m_db.getDB());
-
     query.prepare(R"(
         UPDATE usuario_sesion
         SET password_hash = :password,
             nombre        = :username
         WHERE sesion_activa = 1
     )");
-
     query.bindValue(":username", username);
     query.bindValue(":password", hashPassword(password));
-
-    if (!query.exec())
-    {
+    if (!query.exec()) {
         qDebug() << "Error guardando password:" << query.lastError().text();
         return false;
     }
-
     return true;
 }
 
-bool DataManager::login(
-    const QString& username,
-    const QString& password
-    )
+bool DataManager::login(const QString& username, const QString& password)
 {
-    // login local: fallback offline unicamente.
-    // el login real se hace via loginRed() contra el vps.
-
     QSqlQuery query(m_db.getDB());
-
     query.prepare(R"(
         SELECT nombre, password_hash
         FROM usuario_sesion
         WHERE sesion_activa = 1
         LIMIT 1
     )");
-
-    if (!query.exec() || !query.next())
-    {
+    if (!query.exec() || !query.next()) {
         qDebug() << "No hay sesion activa en sqlite (modo offline).";
         return false;
     }
-
     QString hashGuardado = query.value("password_hash").toString();
-
-    // si no hay hash guardado todavia, aceptamos para el primer login offline
     if (hashGuardado.isEmpty())
         return true;
-
     return hashGuardado == hashPassword(password);
 }
 
-bool DataManager::userExists(
-    const QString& username
-    )
+bool DataManager::userExists(const QString& username)
 {
     QSqlQuery query(m_db.getDB());
-
     query.prepare(R"(
         SELECT nombre
         FROM usuario_sesion
         WHERE sesion_activa = 1
     )");
-
     if (!query.exec() || !query.next())
         return false;
-
-    return query.value("nombre")
-               .toString()
-               .compare(username, Qt::CaseInsensitive) == 0;
+    return query.value("nombre").toString().compare(username, Qt::CaseInsensitive) == 0;
 }
 
 // ─────────────────────────────────────────
@@ -995,20 +751,16 @@ double DataManager::getGastoMes(int year, int month)
 {
     int usuarioId = getUsuarioActivoId();
     QString monthStr = QString("%1").arg(month, 2, 10, QChar('0'));
-
     QString sql = QString(
                       "SELECT COALESCE(SUM(monto), 0) FROM gastos "
                       "WHERE id_usuario = %1 "
                       "AND strftime('%%Y', fecha_gasto) = '%2' "
                       "AND strftime('%%m', fecha_gasto) = '%3'"
                       ).arg(usuarioId).arg(year).arg(monthStr);
-
     QSqlQuery query(m_db.getDB());
     query.exec(sql);
-
     if (query.next())
         return query.value(0).toDouble();
-
     return 0.0;
 }
 
@@ -1016,31 +768,24 @@ int DataManager::getTicketCountMes(int year, int month)
 {
     int usuarioId = getUsuarioActivoId();
     QString monthStr = QString("%1").arg(month, 2, 10, QChar('0'));
-
     QString sql = QString(
                       "SELECT COUNT(*) FROM gastos "
                       "WHERE id_usuario = %1 "
                       "AND strftime('%%Y', fecha_gasto) = '%2' "
                       "AND strftime('%%m', fecha_gasto) = '%3'"
                       ).arg(usuarioId).arg(year).arg(monthStr);
-
     QSqlQuery query(m_db.getDB());
     query.exec(sql);
-
     if (query.next())
         return query.value(0).toInt();
-
     return 0;
 }
 
-QVector<QPair<QString,double>>
-DataManager::getGastosPorCategoria(int year, int month)
+QVector<QPair<QString,double>> DataManager::getGastosPorCategoria(int year, int month)
 {
     QVector<QPair<QString,double>> resultado;
-
     int usuarioId = getUsuarioActivoId();
     QString monthStr = QString("%1").arg(month, 2, 10, QChar('0'));
-
     QString sql = QString(R"(
         SELECT c.nombre AS categoria, SUM(g.monto) AS total
         FROM gastos g
@@ -1051,35 +796,24 @@ DataManager::getGastosPorCategoria(int year, int month)
         GROUP BY c.nombre
         ORDER BY total DESC
     )").arg(usuarioId).arg(year).arg(monthStr);
-
     QSqlQuery query(m_db.getDB());
-    if (!query.exec(sql))
-    {
+    if (!query.exec(sql)) {
         qDebug() << "Error getGastosPorCategoria:" << query.lastError().text();
         return resultado;
     }
-
     while (query.next())
-        resultado.append(qMakePair(
-            query.value("categoria").toString(),
-            query.value("total").toDouble()
-            ));
-
+        resultado.append(qMakePair(query.value("categoria").toString(), query.value("total").toDouble()));
     return resultado;
 }
 
-QVector<QPair<QString,double>>
-DataManager::getGastosPorSemana(int year, int month)
+QVector<QPair<QString,double>> DataManager::getGastosPorSemana(int year, int month)
 {
     QVector<QPair<QString,double>> resultado;
-
     int usuarioId = getUsuarioActivoId();
     QString monthStr = QString("%1").arg(month, 2, 10, QChar('0'));
-
     QString sql = QString(R"(
         SELECT
-            ((CAST(strftime('%%d', fecha_gasto) AS INTEGER) - 1) / 7) + 1
-                AS semana,
+            ((CAST(strftime('%%d', fecha_gasto) AS INTEGER) - 1) / 7) + 1 AS semana,
             SUM(monto) AS total
         FROM gastos
         WHERE id_usuario = %1
@@ -1088,20 +822,13 @@ DataManager::getGastosPorSemana(int year, int month)
         GROUP BY semana
         ORDER BY semana ASC
     )").arg(usuarioId).arg(year).arg(monthStr);
-
     QSqlQuery query(m_db.getDB());
-    if (!query.exec(sql))
-    {
+    if (!query.exec(sql)) {
         qDebug() << "Error getGastosPorSemana:" << query.lastError().text();
         return resultado;
     }
-
     while (query.next())
-        resultado.append(qMakePair(
-            QString("Semana %1").arg(query.value("semana").toInt()),
-            query.value("total").toDouble()
-            ));
-
+        resultado.append(qMakePair(QString("Semana %1").arg(query.value("semana").toInt()), query.value("total").toDouble()));
     return resultado;
 }
 
@@ -1109,41 +836,23 @@ QSqlDatabase DataManager::getDB()
 {
     return m_db.getDB();
 }
-// bool DataManager::updateSuscripcion(const Suscripcion &s)
-// {
-//     for (int i = 0; i < m_suscripciones.size(); i++) {
 
-//         if (m_suscripciones[i].id == s.id) {
-
-//             m_suscripciones[i] = s;
-
-//             emit suscripcionesChanged();
-
-//             return true;
-//         }
-//     }
-
-//     return false;
-// }
+// ─────────────────────────────────────────
+// EDICIÓN DE SUSCRIPCIONES
+// ─────────────────────────────────────────
 
 bool DataManager::updateSuscripcion(const Suscripcion &s)
 {
     int usuarioId = getUsuarioActivoId();
-
-    if (usuarioId < 0)
-    {
+    if (usuarioId < 0) {
         qDebug() << "No hay usuario activo para editar suscripcion.";
         return false;
     }
 
-    //borar esto
-    qDebug() << "EDITANDO SUSCRIPCION ID:" << s.id;
-    qDebug() << "USUARIO ACTIVO:" << usuarioId;
+    qDebug() << "EDITANDO SUSCRIPCION ID:" << s.id << "USUARIO ACTIVO:" << usuarioId;
 
     QSqlQuery query(m_db.getDB());
-
-    // CAMBIO NUEVO - edición local de suscripción pendiente de sincronizar
-                         query.prepare(R"(
+    query.prepare(R"(
         UPDATE suscripciones
         SET nombre = :nombre,
             monto = :monto,
@@ -1154,7 +863,6 @@ bool DataManager::updateSuscripcion(const Suscripcion &s)
         WHERE id_suscripcion_local = :id
         AND id_usuario_remoto = :uid
     )");
-
     query.bindValue(":nombre", s.nombreServicio);
     query.bindValue(":monto", s.monto);
     query.bindValue(":vencimiento", s.fechaVencimiento.toString(Qt::ISODate));
@@ -1162,47 +870,46 @@ bool DataManager::updateSuscripcion(const Suscripcion &s)
     query.bindValue(":id", s.id);
     query.bindValue(":uid", usuarioId);
 
-    if (!query.exec())
-    {
-        qDebug() << "Error updateSuscripcion:"
-                 << query.lastError().text();
+    if (!query.exec()) {
+        qDebug() << "Error updateSuscripcion:" << query.lastError().text();
         return false;
     }
 
     qDebug() << "Filas afectadas:" << query.numRowsAffected();
-
-    if (query.numRowsAffected() == 0)
-    {
+    if (query.numRowsAffected() == 0) {
         qDebug() << "No se encontro la suscripcion para editar.";
         return false;
     }
 
     emit suscripcionesChanged();
-
     return true;
 }
 
-QVector<Notificacion>
-DataManager::getNotificaciones() const
+// ─────────────────────────────────────────
+// NOTIFICACIONES
+// ─────────────────────────────────────────
+
+QVector<Notificacion> DataManager::getNotificaciones() const
 {
     return m_notificaciones;
 }
 
-void DataManager::agregarNotificacion(
-    const Notificacion &n
-    )
+void DataManager::agregarNotificacion(const Notificacion &n)
 {
     m_notificaciones.push_back(n);
-
     emit notificacionesChanged();
 }
+
+// ─────────────────────────────────────────
+// RECORDAR USUARIO
+// ─────────────────────────────────────────
 
 QString DataManager::getUltimoEmail() const
 {
     QSettings settings("AlcancIA", "Login");
     return settings.value("ultimoEmail").toString();
 }
-//añado para que recuerde usuario al hacer click en la casilla de recordarme
+
 void DataManager::setUltimoEmail(const QString &email)
 {
     QSettings settings("AlcancIA", "Login");
@@ -1212,11 +919,8 @@ void DataManager::setUltimoEmail(const QString &email)
 void DataManager::cargarNotificacionesDesdeSQLite()
 {
     m_notificaciones.clear();
-
     int usuarioId = getUsuarioActivoId();
-
     QSqlQuery query(m_db.getDB());
-
     query.prepare(R"(
         SELECT mensaje, fecha_creacion
         FROM notificaciones
@@ -1224,36 +928,23 @@ void DataManager::cargarNotificacionesDesdeSQLite()
         AND leida = 0
         ORDER BY fecha_creacion DESC
     )");
-
     query.bindValue(":uid", usuarioId);
-
-    if (!query.exec())
-    {
-        qDebug() << "Error cargando notificaciones:"
-                 << query.lastError().text();
+    if (!query.exec()) {
+        qDebug() << "Error cargando notificaciones:" << query.lastError().text();
         return;
     }
-
-    while (query.next())
-    {
+    while (query.next()) {
         Notificacion n;
         n.mensaje = query.value("mensaje").toString();
-        n.fecha = QDate::fromString(
-            query.value("fecha_creacion").toString().left(10),
-            Qt::ISODate
-            );
-
+        n.fecha = QDate::fromString(query.value("fecha_creacion").toString().left(10), Qt::ISODate);
         m_notificaciones.append(n);
     }
-
     emit notificacionesChanged();
 }
 
 void DataManager::renovarSuscripcionesVencidasLocales()
 {
     qDebug() << "Llamando renovarSuscripcionesVencidas desde DataManager";
-
     m_db.renovarSuscripcionesVencidas();
-
     emit suscripcionesChanged();
 }

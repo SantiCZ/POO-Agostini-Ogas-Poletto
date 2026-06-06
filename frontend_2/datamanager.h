@@ -25,16 +25,18 @@ public:
     void agregarNotificacion(const Notificacion &n);
     void cargarNotificacionesDesdeSQLite();
 
-    // Suscripciones (solo una declaración)
+    // Suscripciones
     bool updateSuscripcion(const Suscripcion &s);
 
-    // resto de métodos existentes...
     int getUsuarioActivoId();
     void loginRed(const QString& email, const QString& password);
     void sincronizarDesdeServidor(int id_usuario);
-    void sincronizarSuscripcionesLocales(); // CAMBIO NUEVO - sincronización SQLite → VPS
+    void sincronizarSuscripcionesLocales();
     void renovarSuscripcionesVencidasLocales();
     QSqlDatabase getDB();
+
+    // Método para esperar sincronización (útil para cierre)
+    bool syncSuscripcionesLocalesAndWait(int timeoutMs = 10000);   // NUEVO
 
     QVector<Ticket> getTickets(const QString& categoriaFiltro = "", const QString& busqueda = "");
     bool addTicket(const Ticket& t);
@@ -63,7 +65,6 @@ public:
     void guardarSuscripcionRed(const Suscripcion& s);
     void cambiarEstadoRed(EstadoRed nuevoEstado);
 
-
 signals:
     void loginExitoso(int idUsuario, const QString& nombre);
     void loginFallido(const QString& mensaje);
@@ -78,10 +79,14 @@ signals:
     void ticketsChanged();
     void suscripcionesChanged();
 
+    // NUEVA SEÑAL para sincronización local
+    void syncSuscripcionesLocalesCompletada(bool exito);
+
 private slots:
     void onRespuestaRecibida(QNetworkReply* reply);
 
 private:
+    bool haySuscripcionesPendientes();
     DataManager();
     QString hashPassword(const QString& pwd) const;
 

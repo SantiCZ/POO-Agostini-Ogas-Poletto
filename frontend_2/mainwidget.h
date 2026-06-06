@@ -20,6 +20,9 @@ public:
     explicit MainWidget(QWidget *parent = nullptr);
     ~MainWidget() = default;
 
+protected:
+    void closeEvent(QCloseEvent *event) override;   // NUEVO
+
 private slots:
     void onLogout();
     void onRefreshTimer();

@@ -10,7 +10,7 @@
 #include <QAction>
 #include <QCursor>
 
-// ─── SidebarButton ────────────────────────────────────────────────
+// SidebarButton
 SidebarButton::SidebarButton(const QString &icon, const QString &text, QWidget *parent)
     : QPushButton(parent), m_icon(icon), m_text(text)
 {
@@ -62,7 +62,7 @@ void SidebarButton::updateStyle(bool active) {
     }
 }
 
-// ─── Sidebar ──────────────────────────────────────────────────────
+// Sidebar
 Sidebar::Sidebar(QWidget *parent) : QWidget(parent) {
     setObjectName("sidebar");
     setFixedWidth(240);
@@ -75,7 +75,7 @@ void Sidebar::setupUI() {
     m_layout->setContentsMargins(10, 0, 10, 20);
     m_layout->setSpacing(4);
 
-    // ── Logo ──────────────────────────────────────────────────────
+    // Logo
     QWidget *logoContainer = new QWidget();
     logoContainer->setFixedHeight(80);
     QHBoxLayout *logoLayout = new QHBoxLayout(logoContainer);
@@ -91,15 +91,9 @@ void Sidebar::setupUI() {
     logoTextW->setStyleSheet("background: transparent;");
 
     QLabel *logoName = new QLabel("AlcancIA");
-    logoName->setStyleSheet(
-        "color: #F1F5F9; font-size: 18px; font-weight: 700; "
-        "background: transparent; letter-spacing: -0.3px;"
-        );
+    logoName->setStyleSheet("color: #F1F5F9; font-size: 18px; font-weight: 700; background: transparent; letter-spacing: -0.3px;");
     QLabel *logoSub = new QLabel("Asistente financiero");
-    logoSub->setStyleSheet(
-        "color: #4ADE80; font-size: 10px; font-weight: 500; "
-        "background: transparent; letter-spacing: 0.5px;"
-        );
+    logoSub->setStyleSheet("color: #4ADE80; font-size: 10px; font-weight: 500; background: transparent; letter-spacing: 0.5px;");
 
     logoTextL->addWidget(logoName);
     logoTextL->addWidget(logoSub);
@@ -109,19 +103,16 @@ void Sidebar::setupUI() {
 
     m_layout->addWidget(logoContainer);
 
-    // ── Separador ─────────────────────────────────────────────────
+    // Separador
     QFrame *sep1 = new QFrame();
     sep1->setFrameShape(QFrame::HLine);
     sep1->setStyleSheet("background-color: #1E2235; border: none; max-height: 1px;");
     m_layout->addWidget(sep1);
     m_layout->addSpacing(12);
 
-    // ── Sección principal ─────────────────────────────────────────
+    // Sección principal
     QLabel *secLabel = new QLabel("MENÚ");
-    secLabel->setStyleSheet(
-        "color: #374151; font-size: 10px; font-weight: 700; "
-        "letter-spacing: 1.5px; padding-left: 18px; background: transparent;"
-        );
+    secLabel->setStyleSheet("color: #374151; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; padding-left: 18px; background: transparent;");
     m_layout->addWidget(secLabel);
     m_layout->addSpacing(6);
 
@@ -150,7 +141,7 @@ void Sidebar::setupUI() {
 
     m_layout->addSpacing(12);
 
-    // boton subir ticket: acceso rapido desde cualquier pagina
+    // Botón subir ticket
     QPushButton *uploadBtn = new QPushButton("📷   Subir Ticket");
     uploadBtn->setFixedHeight(42);
     uploadBtn->setFixedWidth(220);
@@ -171,7 +162,6 @@ void Sidebar::setupUI() {
         QPushButton:pressed { background: #16A34A; }
     )");
     connect(uploadBtn, &QPushButton::clicked, this, [this]() {
-        // navega a tickets y abre el dialogo de subida
         setActivePage(1);
         emit pageChanged(1);
         emit uploadTicketRequested();
@@ -180,14 +170,14 @@ void Sidebar::setupUI() {
 
     m_layout->addStretch();
 
-    // ── Separador ─────────────────────────────────────────────────
+    // Separador
     QFrame *sep2 = new QFrame();
     sep2->setFrameShape(QFrame::HLine);
     sep2->setStyleSheet("background-color: #1E2235; border: none; max-height: 1px;");
     m_layout->addWidget(sep2);
     m_layout->addSpacing(12);
 
-    // ── Indicador de sincronización ───────────────────────────────
+    // Indicador de sincronización
     m_syncIcon = new QLabel();
     m_syncIcon->setMinimumWidth(160);
     m_syncIcon->setFixedHeight(28);
@@ -197,7 +187,7 @@ void Sidebar::setupUI() {
     m_layout->addWidget(m_syncIcon, 0, Qt::AlignCenter);
     m_layout->addSpacing(6);
 
-    // ── Perfil de usuario (clickeable → menú) ─────────────────────
+    // Perfil de usuario (clickeable → menú solo logout)
     m_profileBtn = new QPushButton();
     m_profileBtn->setFixedHeight(56);
     m_profileBtn->setCursor(Qt::PointingHandCursor);
@@ -218,7 +208,6 @@ void Sidebar::setupUI() {
         }
     )");
 
-    // Layout interno del botón de perfil
     QWidget *profileInner = new QWidget(m_profileBtn);
     profileInner->setAttribute(Qt::WA_TransparentForMouseEvents);
     profileInner->setStyleSheet("background: transparent;");
@@ -229,9 +218,7 @@ void Sidebar::setupUI() {
     QLabel *avatar = new QLabel("👤");
     avatar->setFixedSize(36, 36);
     avatar->setAlignment(Qt::AlignCenter);
-    avatar->setStyleSheet(
-        "background-color: #21253A; border-radius: 18px; font-size: 18px;"
-        );
+    avatar->setStyleSheet("background-color: #21253A; border-radius: 18px; font-size: 18px;");
 
     QWidget *userInfoW = new QWidget();
     userInfoW->setStyleSheet("background: transparent;");
@@ -240,25 +227,19 @@ void Sidebar::setupUI() {
     userInfoL->setSpacing(1);
 
     m_userNameLabel = new QLabel("Mi Cuenta");
-    m_userNameLabel->setStyleSheet(
-        "color: #F1F5F9; font-size: 13px; font-weight: 600; background: transparent;"
-        );
+    m_userNameLabel->setStyleSheet("color: #F1F5F9; font-size: 13px; font-weight: 600; background: transparent;");
     m_userEmailLabel = new QLabel("usuario@email.com");
-    m_userEmailLabel->setStyleSheet(
-        "color: #64748B; font-size: 11px; background: transparent;"
-        );
+    m_userEmailLabel->setStyleSheet("color: #64748B; font-size: 11px; background: transparent;");
 
     userInfoL->addWidget(m_userNameLabel);
     userInfoL->addWidget(m_userEmailLabel);
     profileL->addWidget(avatar);
     profileL->addWidget(userInfoW, 1);
 
-    // Flecha indicando que es clickeable
     QLabel *arrowL = new QLabel("⋮");
     arrowL->setStyleSheet("color: #475569; font-size: 16px; background: transparent;");
     profileL->addWidget(arrowL);
 
-    // Ajustar tamaño del widget interno al botón
     profileInner->setGeometry(0, 0, m_profileBtn->width(), m_profileBtn->height());
     connect(m_profileBtn, &QPushButton::clicked, this, &Sidebar::onProfileClicked);
 
@@ -269,9 +250,6 @@ void Sidebar::setupUI() {
 }
 
 void Sidebar::onProfileClicked() {
-    // menu simplificado: solo logout
-    // las opciones de editar perfil y cambiar contrasena se sacaron
-    // porque no tienen implementacion activa todavia
     QMenu *menu = new QMenu(this);
     menu->setStyleSheet(R"(
         QMenu {
@@ -297,15 +275,7 @@ void Sidebar::onProfileClicked() {
         }
     )");
 
-    // encabezado con nombre (no clickeable)
-    QAction *headerAction = new QAction(
-        QString("👤  %1").arg(m_userNameLabel->text()), this
-        );
-    headerAction->setEnabled(false);
-    menu->addAction(headerAction);
-    menu->addSeparator();
-
-    // cerrar sesion
+    // Solo la acción de cerrar sesión
     QAction *logoutAction = new QAction("🚪   Cerrar sesión", this);
     connect(logoutAction, &QAction::triggered, this, &Sidebar::logoutRequested);
     menu->addAction(logoutAction);
