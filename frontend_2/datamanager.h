@@ -33,6 +33,7 @@ public:
     void loginRed(const QString& email, const QString& password);
     void sincronizarDesdeServidor(int id_usuario);
     void sincronizarSuscripcionesLocales(); // CAMBIO NUEVO - sincronización SQLite → VPS
+    void renovarSuscripcionesVencidasLocales();
     QSqlDatabase getDB();
 
     QVector<Ticket> getTickets(const QString& categoriaFiltro = "", const QString& busqueda = "");
@@ -61,6 +62,7 @@ public:
     void registrarUsuarioRed(const QString& username, const QString& email, const QString& password);
     void guardarSuscripcionRed(const Suscripcion& s);
     void cambiarEstadoRed(EstadoRed nuevoEstado);
+
 
 signals:
     void loginExitoso(int idUsuario, const QString& nombre);

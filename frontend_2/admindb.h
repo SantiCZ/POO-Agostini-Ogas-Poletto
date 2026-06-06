@@ -28,7 +28,7 @@ public:
     bool obtenerUltimoUsuario(QString &nombre, QString &email);
     bool guardarNotificaciones(QJsonArray notificaciones);
     bool generarNotificacionesVencimiento();
-    //bool eliminarSuscripcionLocal(int idSuscripcionLocal);
+    bool renovarSuscripcionesVencidas();
 
 private:
     // nuevo: nombre fijo de conexion para que todos reutilicen la misma

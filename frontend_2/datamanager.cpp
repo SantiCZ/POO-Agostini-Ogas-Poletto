@@ -354,6 +354,9 @@ void DataManager::onRespuestaRecibida(
     {
         if (m_db.sincronizarDesdeJson(responseData))
         {
+            qDebug() << "Llamando renovarSuscripcionesVencidas...";
+            m_db.renovarSuscripcionesVencidas();
+
             // NUEVO: revisa las suscripciones sincronizadas y genera avisos de vencimiento
             m_db.generarNotificacionesVencimiento();
 
@@ -1244,4 +1247,13 @@ void DataManager::cargarNotificacionesDesdeSQLite()
     }
 
     emit notificacionesChanged();
+}
+
+void DataManager::renovarSuscripcionesVencidasLocales()
+{
+    qDebug() << "Llamando renovarSuscripcionesVencidas desde DataManager";
+
+    m_db.renovarSuscripcionesVencidas();
+
+    emit suscripcionesChanged();
 }

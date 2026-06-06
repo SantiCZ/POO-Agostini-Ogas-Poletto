@@ -601,6 +601,42 @@ bool adminDB::generarNotificacionesVencimiento()
         QString nombre = buscar.value("nombre").toString();
         QString vencimiento = buscar.value("vencimiento").toString();
 
+        QString mensaje =
+            "Tu suscripcion " + nombre +
+            " vence el " + vencimiento;
+
+        qDebug() << "Generando notificacion para usuario:"
+                 << idUsuario
+                 << "mensaje:"
+                 << mensaje;
+
+        QSqlQuery existe(conn);
+
+        existe.prepare(R"(
+            SELECT COUNT(*)
+            FROM notificaciones
+            WHERE id_usuario = :uid
+            AND tipo = 'vencimiento'
+            AND mensaje = :mensaje
+            AND leida = 0
+        )");
+
+        existe.bindValue(":uid", idUsuario);
+        existe.bindValue(":mensaje", mensaje);
+
+        if (!existe.exec())
+        {
+            qDebug() << "Error verificando duplicado:"
+                     << existe.lastError().text();
+            return false;
+        }
+
+        if (existe.next() && existe.value(0).toInt() > 0)
+        {
+            qDebug() << "Notificacion duplicada, no se inserta.";
+            continue;
+        }
+
         QSqlQuery insertar(conn);
 
         insertar.prepare(R"(
@@ -610,11 +646,7 @@ bool adminDB::generarNotificacionesVencimiento()
         )");
 
         insertar.bindValue(":uid", idUsuario);
-        insertar.bindValue(
-            ":mensaje",
-            "Tu suscripcion " + nombre +
-                " vence el " + vencimiento
-            );
+        insertar.bindValue(":mensaje", mensaje);
 
         if (!insertar.exec())
         {
@@ -622,6 +654,94 @@ bool adminDB::generarNotificacionesVencimiento()
                      << insertar.lastError().text();
             return false;
         }
+    }
+
+    return true;
+}
+
+bool adminDB::renovarSuscripcionesVencidas()
+{
+    qDebug() << "=== RENOVANDO SUSCRIPCIONES VENCIDAS ===";
+
+    QSqlDatabase conn = QSqlDatabase::database(CONNECTION_NAME);
+
+    QSqlQuery buscar(conn);
+
+    buscar.prepare(R"(
+        SELECT id_suscripcion_local,
+               nombre,
+               vencimiento,
+               frecuencia
+        FROM suscripciones
+        WHERE actividad = 1
+        AND date(vencimiento) < date('now')
+    )");
+
+    if (!buscar.exec())
+    {
+        qDebug() << "Error buscando suscripciones vencidas:"
+                 << buscar.lastError().text();
+        return false;
+    }
+
+    while (buscar.next())
+    {
+        qDebug() << "Suscripcion vencida encontrada:"
+                 << buscar.value("nombre").toString()
+                 << buscar.value("vencimiento").toString()
+                 << buscar.value("frecuencia").toString();
+
+        int idLocal = buscar.value("id_suscripcion_local").toInt();
+        QString nombre = buscar.value("nombre").toString();
+        QString vencimientoTexto = buscar.value("vencimiento").toString();
+        QString frecuencia = buscar.value("frecuencia").toString().toLower();
+
+        QDate vencimiento = QDate::fromString(vencimientoTexto, Qt::ISODate);
+        QDate nuevoVencimiento = vencimiento;
+
+        if (frecuencia == "mensual")
+        {
+            nuevoVencimiento = vencimiento.addMonths(1);
+        }
+        else if (frecuencia == "semanal")
+        {
+            nuevoVencimiento = vencimiento.addDays(7);
+        }
+        else if (frecuencia == "anual")
+        {
+            nuevoVencimiento = vencimiento.addYears(1);
+        }
+        else
+        {
+            qDebug() << "Frecuencia desconocida en suscripcion:"
+                     << nombre << frecuencia;
+            continue;
+        }
+
+        QSqlQuery actualizar(conn);
+
+        actualizar.prepare(R"(
+            UPDATE suscripciones
+            SET vencimiento = :nuevoVencimiento,
+                sincronizado = 0,
+                accion_pendiente = 'editar'
+            WHERE id_suscripcion_local = :id
+        )");
+
+        actualizar.bindValue(":nuevoVencimiento", nuevoVencimiento.toString(Qt::ISODate));
+        actualizar.bindValue(":id", idLocal);
+
+        if (!actualizar.exec())
+        {
+            qDebug() << "Error renovando suscripcion vencida:"
+                     << actualizar.lastError().text();
+            return false;
+        }
+
+        qDebug() << "Suscripcion renovada:"
+                 << nombre
+                 << "de" << vencimientoTexto
+                 << "a" << nuevoVencimiento.toString(Qt::ISODate);
     }
 
     return true;

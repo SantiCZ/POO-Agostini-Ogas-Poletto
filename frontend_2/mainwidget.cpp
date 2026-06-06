@@ -8,6 +8,8 @@
 #include <QApplication>
 #include <QDebug>
 
+#include <QPushButton>
+
 MainWidget::MainWidget(QWidget *parent) : QWidget(parent) {
 
     setWindowTitle("AlcancIA — Asistente Financiero");
@@ -97,6 +99,21 @@ void MainWidget::setupUI() {
         }
     )");
     m_notifBadge->hide();
+
+    //borar despues
+    QPushButton *btnProbarSync = new QPushButton("Probar Sync");
+    btnProbarSync->setCursor(Qt::PointingHandCursor);
+
+    connect(btnProbarSync, &QPushButton::clicked, this, []()
+            {
+                qDebug() << "Boton Probar Sync presionado";
+
+                DataManager::instance().renovarSuscripcionesVencidasLocales();
+                DataManager::instance().sincronizarSuscripcionesLocales();
+            });
+
+    topbarL->addWidget(btnProbarSync);
+    //-------------------------------------------------------------
 
     topbarL->addWidget(notifContainer);
 
