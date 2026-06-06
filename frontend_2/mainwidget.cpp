@@ -6,6 +6,7 @@
 #include <QVBoxLayout>
 #include <QMessageBox>
 #include <QApplication>
+#include <QDebug>
 
 MainWidget::MainWidget(QWidget *parent) : QWidget(parent) {
 

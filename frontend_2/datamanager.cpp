@@ -156,6 +156,88 @@ void DataManager::sincronizarDesdeServidor(
     networkManager->get(request);
 }
 
+void DataManager::sincronizarSuscripcionesLocales()
+{
+    int usuarioId = getUsuarioActivoId();
+
+    if (usuarioId < 0)
+    {
+        qDebug() << "No hay usuario activo para sincronizar.";
+        return;
+    }
+
+    QSqlQuery query(m_db.getDB());
+
+    // CAMBIO NUEVO - buscar cambios locales pendientes
+    query.prepare(R"(
+        SELECT id_suscripcion_remota,
+               id_categoria_remota,
+               nombre,
+               monto,
+               moneda,
+               frecuencia,
+               vencimiento,
+               alerta,
+               actividad,
+               notas,
+               accion_pendiente
+        FROM suscripciones
+        WHERE id_usuario_remoto = :uid
+        AND (
+            sincronizado = 0
+            OR accion_pendiente != 'ninguna'
+        )
+    )");
+
+    query.bindValue(":uid", usuarioId);
+
+    if (!query.exec())
+    {
+        qDebug() << "Error buscando suscripciones pendientes:"
+                 << query.lastError().text();
+        return;
+    }
+
+    QJsonArray subsArray;
+
+    while (query.next())
+    {
+        QJsonObject subJson;
+
+        subJson["id_suscripcion_remota"] = query.value("id_suscripcion_remota").toInt();
+        subJson["id_categoria_remota"] = query.value("id_categoria_remota").toInt();
+        subJson["nombre"] = query.value("nombre").toString();
+        subJson["monto"] = query.value("monto").toDouble();
+        subJson["moneda"] = query.value("moneda").toString();
+        subJson["frecuencia"] = query.value("frecuencia").toString();
+        subJson["vencimiento"] = query.value("vencimiento").toString();
+        subJson["alerta"] = query.value("alerta").toInt();
+        subJson["actividad"] = query.value("actividad").toInt();
+        subJson["notas"] = query.value("notas").toString();
+        subJson["accion_pendiente"] = query.value("accion_pendiente").toString();
+
+        subsArray.append(subJson);
+    }
+
+    if (subsArray.isEmpty())
+    {
+        qDebug() << "No hay suscripciones pendientes para sincronizar.";
+        return;
+    }
+
+    cambiarEstadoRed(SINCRONIZANDO);
+
+    QUrl url("http://161.97.92.143/api/v1/suscripciones/sync");
+    QNetworkRequest request(url);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    QJsonObject jsonRaiz;
+    jsonRaiz["id_usuario"] = usuarioId;
+    jsonRaiz["suscripciones"] = subsArray;
+
+    networkManager->post(request, QJsonDocument(jsonRaiz).toJson());
+}
+
 // ─────────────────────────────────────────
 // RESPUESTAS RED
 // ─────────────────────────────────────────
@@ -240,6 +322,29 @@ void DataManager::onRespuestaRecibida(
         else
         {
             emit loginFallido(root["message"].toString());
+            cambiarEstadoRed(ERROR_CONEXION);
+        }
+    }
+
+    else if (path.contains("/suscripciones/sync"))
+    {
+        QJsonObject root = QJsonDocument::fromJson(responseData).object();
+
+        if (root["status"].toString() == "ok")
+        {
+            qDebug() << "Cambios locales de suscripciones sincronizados con VPS.";
+
+            int idUsuario = getUsuarioActivoId();
+
+            if (idUsuario > 0)
+            {
+                sincronizarDesdeServidor(idUsuario);
+            }
+        }
+        else
+        {
+            emit errorDeRed("Error sincronizando suscripciones: "
+                            + root["message"].toString());
             cambiarEstadoRed(ERROR_CONEXION);
         }
     }
@@ -670,6 +775,7 @@ QVector<Suscripcion> DataManager::getSuscripciones()
         LEFT JOIN categorias c
             ON s.id_categoria_remota = c.id_categoria
         WHERE s.id_usuario_remoto = :uid
+        AND s.actividad = 1
         ORDER BY s.vencimiento ASC
     )");
 
@@ -781,9 +887,8 @@ int DataManager::getSuscripcionesActivas()
     query.prepare(R"(
         SELECT COUNT(*)
         FROM suscripciones
-        WHERE s.id_usuario_remoto = :uid
-        AND s.actividad = 1
-        ORDER BY s.vencimiento ASC
+        WHERE id_usuario_remoto = :uid
+        AND actividad = 1
     )");
 
     query.bindValue(":uid", usuarioId);
@@ -1015,36 +1120,55 @@ QSqlDatabase DataManager::getDB()
 
 //     return false;
 // }
+
 bool DataManager::updateSuscripcion(const Suscripcion &s)
 {
-    QSqlQuery query;
+    int usuarioId = getUsuarioActivoId();
 
-    query.prepare(R"(
+    if (usuarioId < 0)
+    {
+        qDebug() << "No hay usuario activo para editar suscripcion.";
+        return false;
+    }
+
+    //borar esto
+    qDebug() << "EDITANDO SUSCRIPCION ID:" << s.id;
+    qDebug() << "USUARIO ACTIVO:" << usuarioId;
+
+    QSqlQuery query(m_db.getDB());
+
+    // CAMBIO NUEVO - edición local de suscripción pendiente de sincronizar
+                         query.prepare(R"(
         UPDATE suscripciones
-        SET nombre_servicio = ?,
-            monto = ?,
-            fecha_vencimiento = ?,
-            dias_aviso = ?,
-            categoria = ?,
-            icono_nombre = ?,
+        SET nombre = :nombre,
+            monto = :monto,
+            vencimiento = :vencimiento,
+            alerta = :alerta,
             sincronizado = 0,
             accion_pendiente = 'editar'
-        WHERE id = ?
+        WHERE id_suscripcion_local = :id
+        AND id_usuario_remoto = :uid
     )");
 
-    query.addBindValue(s.nombreServicio);
-    query.addBindValue(s.monto);
-    query.addBindValue(s.fechaVencimiento.toString(Qt::ISODate));
-    query.addBindValue(s.diasAviso);
-    query.addBindValue(s.categoria);
-    query.addBindValue(s.iconoNombre);
-    query.addBindValue(s.id);
+    query.bindValue(":nombre", s.nombreServicio);
+    query.bindValue(":monto", s.monto);
+    query.bindValue(":vencimiento", s.fechaVencimiento.toString(Qt::ISODate));
+    query.bindValue(":alerta", s.diasAviso);
+    query.bindValue(":id", s.id);
+    query.bindValue(":uid", usuarioId);
 
-    bool ok = query.exec();
-
-    if (!ok) {
+    if (!query.exec())
+    {
         qDebug() << "Error updateSuscripcion:"
                  << query.lastError().text();
+        return false;
+    }
+
+    qDebug() << "Filas afectadas:" << query.numRowsAffected();
+
+    if (query.numRowsAffected() == 0)
+    {
+        qDebug() << "No se encontro la suscripcion para editar.";
         return false;
     }
 
@@ -1052,6 +1176,7 @@ bool DataManager::updateSuscripcion(const Suscripcion &s)
 
     return true;
 }
+
 QVector<Notificacion>
 DataManager::getNotificaciones() const
 {

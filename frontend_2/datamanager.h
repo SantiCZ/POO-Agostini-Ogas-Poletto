@@ -27,6 +27,7 @@ public:
     int getUsuarioActivoId();
     void loginRed(const QString& email, const QString& password);
     void sincronizarDesdeServidor(int id_usuario);
+    void sincronizarSuscripcionesLocales(); // CAMBIO NUEVO - sincronización SQLite → VPS
     QSqlDatabase getDB();
 
     QVector<Ticket> getTickets(const QString& categoriaFiltro = "", const QString& busqueda = "");
