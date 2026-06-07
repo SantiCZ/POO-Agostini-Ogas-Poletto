@@ -395,26 +395,17 @@ void DataManager::onRespuestaRecibida(QNetworkReply *reply)
     // ─── GUARDAR SUSCRIPCION ─────────────────────
     else if (path.contains("/suscripciones/guardar")) {
         QJsonObject root = QJsonDocument::fromJson(responseData).object();
-        int idUsuario = getUsuarioActivoId();
-        QSqlQuery limpiar(m_db.getDB());
-        limpiar.prepare(R"(
-            UPDATE suscripciones
-            SET sincronizado = 1,
-                accion_pendiente = 'ninguna'
-            WHERE sincronizado = 0
-            OR accion_pendiente != 'ninguna'
-        )");
 
-        if (!limpiar.exec()) {
-            qDebug() << "Error limpiando pendientes despues del sync:"
-                     << limpiar.lastError().text();
+        // Flujo correcto:
+        // 1) Guardar nueva suscripción en VPS.
+        // 2) Enviar pendientes locales: editar/eliminar.
+        // 3) Recién después hacer sync general desde VPS.
+        if (root["status"].toString() == "ok") {
+            sincronizarSuscripcionesLocales();
+        } else {
+            emit errorDeRed("Error guardando suscripción: " + root["message"].toString());
+            cambiarEstadoRed(ERROR_CONEXION);
         }
-
-        if (idUsuario > 0) {
-            sincronizarDesdeServidor(idUsuario);
-        }
-
-        emit syncSuscripcionesLocalesCompletada(true);
     }
     // ─── REGISTRO ────────────────────────────────
     else if (path.contains("/registro")) {
