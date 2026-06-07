@@ -10,6 +10,16 @@
 
 #include "models.h"
 
+/*
+ * SubCard
+ * Responsabilidad de clase:
+ * Tarjeta visual de una suscripcion.
+ * Usa senales para pedir activar/desactivar, eliminar o editar sin conocer
+ * directamente la logica de datos.
+ *
+ * SIGNAL:
+ * Las senales separan la tarjeta visual de la logica de persistencia.
+ */
 class SubCard : public QFrame
 {
     Q_OBJECT
@@ -35,6 +45,17 @@ signals:
         );
 };
 
+/*
+ * SubscriptionsPage
+ * Responsabilidad de clase:
+ * Pantalla para gestionar suscripciones recurrentes.
+ * Muestra totales, permite crear nuevas suscripciones y editar o desactivar
+ * las existentes.
+ *
+ * Validaciones:
+ * La creacion/edicion se apoya en AddSubscriptionDialog, donde se validan
+ * campos antes de guardar.
+ */
 class SubscriptionsPage : public QWidget
 {
     Q_OBJECT
@@ -44,6 +65,7 @@ public:
         QWidget *parent = nullptr
         );
 
+    // Recarga las suscripciones activas desde DataManager.
     void refreshData();
 
 public slots:
@@ -60,6 +82,8 @@ private:
         );
 
 private:
+    // Atributos importantes: lista y totales se actualizan cada vez
+    // que cambian las suscripciones.
     QVBoxLayout *m_subListLayout = nullptr;
 
     QWidget *m_subListWidget = nullptr;

@@ -81,6 +81,9 @@ void BarChart::setData(const QVector<QPair<QString,double>> &data, double maxVal
 }
 
 void BarChart::paintEvent(QPaintEvent *) {
+    // paintEvent:
+    // Qt llama este metodo cada vez que el widget debe repintarse. Se usa
+    // QPainter para dibujar barras proporcionales a los datos semanales.
     if (m_data.isEmpty()) return;
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
@@ -166,7 +169,10 @@ void ReportsPage::setupUI() {
 
     headerL->addWidget(titleW);
     headerL->addStretch();
-    // Botón Exportar ELIMINADO
+    // Exportaciones:
+    // La pantalla no exporta archivos actualmente. El boton de exportar fue
+    // eliminado para evitar prometer una funcionalidad que no esta implementada.
+    // Si se agrega en el futuro, deberia generar PDF/CSV desde estos reportes.
 
     mainL->addWidget(headerW);
 
@@ -227,7 +233,7 @@ void ReportsPage::refreshData() {
     int year  = now.year();
     int month = now.month();
 
-    QVector<Ticket> tickets = DataManager::instance().getTickets();
+    const QVector<Ticket> tickets = DataManager::instance().getTickets();
 
     double gastoMes = 0.0;
     int    ticketCount = 0;

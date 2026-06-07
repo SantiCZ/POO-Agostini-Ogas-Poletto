@@ -209,6 +209,10 @@ void Sidebar::setupUI() {
     )");
 
     QWidget *profileInner = new QWidget(m_profileBtn);
+    // Eventos de mouse:
+    // El contenido interno del boton no debe capturar clicks propios; al hacerlo
+    // transparente al mouse, el click llega al QPushButton padre y dispara
+    // clicked(), que luego abre el menu de perfil.
     profileInner->setAttribute(Qt::WA_TransparentForMouseEvents);
     profileInner->setStyleSheet("background: transparent;");
     QHBoxLayout *profileL = new QHBoxLayout(profileInner);
@@ -250,6 +254,9 @@ void Sidebar::setupUI() {
 }
 
 void Sidebar::onProfileClicked() {
+    // Eventos de mouse:
+    // No se sobrescribe mousePressEvent porque QPushButton ya traduce el click
+    // del mouse en la senal clicked(). Este slot responde a esa senal.
     QMenu *menu = new QMenu(this);
     menu->setStyleSheet(R"(
         QMenu {

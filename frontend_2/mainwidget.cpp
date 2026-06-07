@@ -11,6 +11,13 @@
 #include <QCloseEvent>          // NUEVO
 #include <QProgressDialog>      // NUEVO
 
+/*
+ * mainwidget.cpp
+ * Implementa la ventana principal y la navegacion entre paginas.
+ * Tambien coordina acciones globales como refresco, logout, notificaciones y
+ * sincronizacion antes de cerrar.
+ */
+
 MainWidget::MainWidget(QWidget *parent) : QWidget(parent) {
 
     setWindowTitle("AlcancIA — Asistente Financiero");
@@ -20,6 +27,7 @@ MainWidget::MainWidget(QWidget *parent) : QWidget(parent) {
     applyStyles();
     setupUI();
 
+    // Refresco periodico para que dashboard/reportes reflejen cambios recientes.
     m_refreshTimer = new QTimer(this);
     connect(m_refreshTimer, &QTimer::timeout, this, &MainWidget::onRefreshTimer);
     m_refreshTimer->start(30000);
@@ -34,6 +42,7 @@ void MainWidget::applyStyles() {
 
 void MainWidget::setupUI() {
 
+    // Layout raiz: sidebar fijo a la izquierda y paginas en QStackedWidget.
     QHBoxLayout *rootLayout = new QHBoxLayout(this);
     rootLayout->setContentsMargins(0, 0, 0, 0);
     rootLayout->setSpacing(0);
@@ -97,15 +106,6 @@ void MainWidget::setupUI() {
     )");
     m_notifBadge->hide();
 
-    // Botón de prueba (puede eliminarse en producción)
-    QPushButton *btnProbarSync = new QPushButton("Probar Sync");
-    btnProbarSync->setCursor(Qt::PointingHandCursor);
-    connect(btnProbarSync, &QPushButton::clicked, this, []() {
-        qDebug() << "Boton Probar Sync presionado";
-        DataManager::instance().renovarSuscripcionesVencidasLocales();
-        DataManager::instance().sincronizarSuscripcionesLocales();
-    });
-    topbarL->addWidget(btnProbarSync);
     topbarL->addWidget(notifContainer);
     contentLayout->addWidget(topbar);
 
@@ -135,6 +135,8 @@ void MainWidget::setupUI() {
 
     connect(&DataManager::instance(), &DataManager::sincronizacionCompletada,
             this, [this]() {
+                // Cuando DataManager termina de bajar datos del VPS, se
+                // reconstruyen las paginas visibles desde SQLite.
                 refreshAllPages();
                 updateNotifBadge();
             });
@@ -286,6 +288,8 @@ void MainWidget::onNotificacionesClicked()
 }
 
 void MainWidget::refreshAllPages() {
+    // Cada pagina consulta sus propios datos. MainWidget solo coordina el
+    // refresco global para mantener las vistas sincronizadas.
     m_dashboard->refreshData();
     m_tickets->refreshData();
     m_subs->refreshData();
@@ -300,6 +304,8 @@ void MainWidget::onRefreshTimer() {
 
 // NUEVO: Cierre de ventana con sincronización
 void MainWidget::closeEvent(QCloseEvent *event) {
+    // Antes de salir se intenta subir cambios locales para no perder ediciones
+    // hechas sin conexion o pendientes de sincronizacion.
     QProgressDialog progress("Guardando cambios antes de salir...", "", 0, 0, this);
     progress.setWindowModality(Qt::WindowModal);
     progress.setMinimumDuration(0);
@@ -318,6 +324,8 @@ void MainWidget::closeEvent(QCloseEvent *event) {
 
 // NUEVO: Logout con sincronización
 void MainWidget::onLogout() {
+    // Cerrar sesion comparte la misma precaucion que cerrar la app:
+    // intentar sincronizar antes de abandonar la sesion activa.
     QMessageBox::StandardButton reply = QMessageBox::question(
         this, "Cerrar sesión",
         "¿Estás seguro de que querés cerrar sesión?",

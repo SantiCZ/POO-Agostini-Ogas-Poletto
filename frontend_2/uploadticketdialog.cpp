@@ -304,6 +304,9 @@ void UploadTicketDialog::onAnalyzeIA()
 
 void UploadTicketDialog::accept()
 {
+    // Validaciones:
+    // No se permite guardar un ticket sin comercio, con monto invalido o sin
+    // sesion activa. Estas validaciones protegen la integridad de SQLite.
     if (m_localEdit->text().trimmed().isEmpty()) {
         QMessageBox::warning(this, "Error", "Ingresá el nombre del comercio.");
         return;
@@ -336,6 +339,9 @@ void UploadTicketDialog::accept()
     }
     // --------------------------------------
 
+    // Atributos importantes:
+    // m_iaJsonResult conserva la respuesta completa de IA hasta convertirla en
+    // modelos C++ antes de guardar.
     // --- NUEVO: TRADUCIMOS LOS ITEMS DE LA IA A C++ ---
     if (t.procesadoPorIA && m_iaJsonResult.contains("items_gasto")) {
         QJsonArray itemsArray = m_iaJsonResult["items_gasto"].toArray();
@@ -351,6 +357,8 @@ void UploadTicketDialog::accept()
     }
     // --------------------------------------------------
 
+    // SQLite:
+    // El guardado se delega a DataManager para no acoplar el dialogo a SQL.
     if (!DataManager::instance().addTicket(t)) {
         QMessageBox::warning(this, "Error", "No se pudo guardar el ticket.");
         return;

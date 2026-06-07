@@ -156,6 +156,9 @@ void AddSubscriptionDialog::setupUI() {
 
 void AddSubscriptionDialog::accept()
 {
+    // Validaciones:
+    // Antes de guardar se exige un nombre de servicio. Si falla, el dialogo no
+    // se cierra y el foco vuelve al campo que debe corregirse.
     if (m_nombreEdit->text().trimmed().isEmpty()) {
         QMessageBox::warning(this, "Atención", "Por favor ingresá el nombre del servicio.");
         m_nombreEdit->setFocus();
@@ -172,6 +175,9 @@ void AddSubscriptionDialog::accept()
     s.activa         = true;
     s.iconoNombre    = s.nombreServicio.toLower().simplified();
 
+    // SQLite:
+    // El dialogo no ejecuta SQL directamente. Delega en DataManager, que
+    // centraliza la persistencia local y la sincronizacion remota.
     // CORREGIDO: addSuscripcion() centraliza todo:
     //   - INSERT en SQLite local
     //   - envio al VPS via guardarSuscripcionRed()

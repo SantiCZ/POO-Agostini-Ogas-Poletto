@@ -8,6 +8,13 @@
 #include <QJsonArray>
 #include <QJsonValue>
 
+/*
+ * admindb.cpp
+ * Implementa la persistencia local SQLite.
+ * Esta clase contiene el SQL y las reglas de sincronizacion local para que
+ * DataManager y las pantallas no dependan del detalle de tablas.
+ */
+
 // nuevo: nombre fijo de conexion compartida por toda la app
 // antes se usaba addDatabase("QSQLITE") sin nombre, lo que creaba
 // qt_sql_default_connection y la destruia cada vez que se instanciaba adminDB
@@ -33,6 +40,11 @@ adminDB::adminDB(QObject *parent) : QObject{parent}
 // CONECTAR BASE DE DATOS
 bool adminDB::conectar(QString archivoSqlite)
 {
+    // SQLite:
+    // Aqui se abre/crea la base local. Todas las tablas se preparan desde esta
+    // clase para que el resto del proyecto no dependa del SQL de bajo nivel.
+    // Si la conexion ya apunta al archivo correcto, se reutiliza para evitar
+    // cerrar la base mientras otras clases la estan usando.
     // si ya esta abierta y apunta al mismo archivo, no hacemos nada
     if (db.isOpen() && db.databaseName() == archivoSqlite)
     {
@@ -51,6 +63,8 @@ bool adminDB::conectar(QString archivoSqlite)
         // la tabla usuario_sesion es propia del cliente (no existe en mysql)
         // y guarda la sesion activa mas el hash de password para login offline.
 
+        // usuario_sesion: tabla propia del cliente. Guarda quien esta activo y
+        // permite login offline con password_hash si ya hubo una sesion previa.
         query.exec(R"(
             CREATE TABLE IF NOT EXISTS usuario_sesion (
                 id_local          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,6 +76,8 @@ bool adminDB::conectar(QString archivoSqlite)
             )
         )");
 
+        // categorias: catalogo local que permite clasificar gastos aunque la
+        // UI este leyendo desde SQLite.
         query.exec(R"(
             CREATE TABLE IF NOT EXISTS categorias (
                 id_categoria INTEGER PRIMARY KEY,
@@ -72,6 +88,8 @@ bool adminDB::conectar(QString archivoSqlite)
             )
         )");
 
+        // gastos: copia local de tickets/gastos. Se consulta para dashboard,
+        // reportes y listado de tickets.
         query.exec(R"(
             CREATE TABLE IF NOT EXISTS gastos (
                 id_gasto      INTEGER PRIMARY KEY,
@@ -86,6 +104,8 @@ bool adminDB::conectar(QString archivoSqlite)
             )
         )");
 
+        // suscripciones: mantiene estado local, actividad y marcas pendientes
+        // para sincronizar creaciones/ediciones/eliminaciones.
         query.exec(R"(
             CREATE TABLE IF NOT EXISTS suscripciones (
                 id_suscripcion_local INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -107,6 +127,7 @@ bool adminDB::conectar(QString archivoSqlite)
             )
         )");
 
+        // notificaciones: avisos generados desde vencimientos de suscripciones.
         query.exec(R"(
             CREATE TABLE IF NOT EXISTS notificaciones (
                 id_notificacion INTEGER PRIMARY KEY,
@@ -145,6 +166,8 @@ QSqlDatabase adminDB::getDB()
 
 bool adminDB::limpiarBaseDeDatos()
 {
+    // Solo se limpian datos del usuario activo para no mezclar informacion
+    // de distintas sesiones despues de una sincronizacion completa.
     QSqlDatabase conn =
         QSqlDatabase::database(CONNECTION_NAME);
 
@@ -213,6 +236,11 @@ bool adminDB::limpiarBaseDeDatos()
 
 bool adminDB::sincronizarDesdeJson(QByteArray datosJson)
 {
+    // SQLite:
+    // La sincronizacion usa una transaccion. Si falla guardar alguna tabla,
+    // rollback evita dejar la base en un estado parcial.
+    // El servidor entrega todo el estado del usuario en JSON. La transaccion
+    // asegura que no quede una sincronizacion parcial si alguna tabla falla.
     QJsonParseError errorJson;
     QJsonDocument doc = QJsonDocument::fromJson(datosJson, &errorJson);
 
@@ -225,6 +253,8 @@ bool adminDB::sincronizarDesdeJson(QByteArray datosJson)
     QJsonObject root = doc.object();
     QSqlDatabase conn = QSqlDatabase::database(CONNECTION_NAME);
 
+    // La transaccion agrupa limpieza + guardado. Si una parte falla, rollback
+    // deja SQLite como estaba antes de empezar la sincronizacion.
     conn.transaction();
 
     if (!limpiarBaseDeDatos())
@@ -233,31 +263,24 @@ bool adminDB::sincronizarDesdeJson(QByteArray datosJson)
         return false;
     }
 
-    // nuevo: log detallado por paso para identificar exactamente que tabla falla
     bool ok = true;
 
-    qDebug() << "sync: guardando usuario...";
     ok = guardarUsuarioSesion(root["usuario"].toObject());
     if (!ok) { qDebug() << "sync FALLO: guardarUsuarioSesion"; conn.rollback(); return false; }
 
-    qDebug() << "sync: guardando categorias...";
     ok = guardarCategorias(root["categorias"].toArray());
     if (!ok) { qDebug() << "sync FALLO: guardarCategorias"; conn.rollback(); return false; }
 
-    qDebug() << "sync: guardando gastos...";
     ok = guardarGastos(root["gastos"].toArray());
     if (!ok) { qDebug() << "sync FALLO: guardarGastos"; conn.rollback(); return false; }
 
-    qDebug() << "sync: guardando suscripciones...";
     ok = guardarSuscripciones(root["suscripciones"].toArray());
     if (!ok) { qDebug() << "sync FALLO: guardarSuscripciones"; conn.rollback(); return false; }
 
-    qDebug() << "sync: guardando notificaciones...";
     ok = guardarNotificaciones(root["notificaciones"].toArray());
     if (!ok) { qDebug() << "sync FALLO: guardarNotificaciones"; conn.rollback(); return false; }
 
     conn.commit();
-    qDebug() << "Sincronizacion local exitosa (base limpia).";
     return true;
 }
 
@@ -302,11 +325,11 @@ bool adminDB::guardarUsuarioSesion(QJsonObject usuario)
 
 
 
-bool adminDB::guardarCategorias(QJsonArray categorias)
+bool adminDB::guardarCategorias(const QJsonArray &categorias)
 {
     QSqlDatabase conn = QSqlDatabase::database(CONNECTION_NAME);
 
-    for (QJsonValue valor : categorias)
+    for (const QJsonValue &valor : categorias)
     {
         QJsonObject cat = valor.toObject();
         QSqlQuery query(conn);
@@ -337,11 +360,11 @@ bool adminDB::guardarCategorias(QJsonArray categorias)
     return true;
 }
 
-bool adminDB::guardarGastos(QJsonArray gastos)
+bool adminDB::guardarGastos(const QJsonArray &gastos)
 {
     QSqlDatabase conn = QSqlDatabase::database(CONNECTION_NAME);
 
-    for (QJsonValue valor : gastos)
+    for (const QJsonValue &valor : gastos)
     {
         QJsonObject gasto = valor.toObject();
         QSqlQuery query(conn);
@@ -375,22 +398,16 @@ bool adminDB::guardarGastos(QJsonArray gastos)
     return true;
 }
 
-bool adminDB::guardarSuscripciones(QJsonArray suscripciones)
+bool adminDB::guardarSuscripciones(const QJsonArray &suscripciones)
 {
     QSqlDatabase conn =
         QSqlDatabase::database(CONNECTION_NAME);
 
-    qDebug()
-        << "Cantidad de suscripciones recibidas:"
-        << suscripciones.size();
 
     for (const QJsonValue &valor : suscripciones)
     {
         QJsonObject sub = valor.toObject();
 
-        qDebug()
-            << "Suscripción JSON:"
-            << sub;
 
         QSqlQuery query(conn);
 
@@ -499,9 +516,6 @@ bool adminDB::guardarSuscripciones(QJsonArray suscripciones)
             return false;
         }
 
-        qDebug()
-            << "Suscripción guardada:"
-            << sub["nombre"].toString();
     }
 
     return true;
@@ -509,11 +523,11 @@ bool adminDB::guardarSuscripciones(QJsonArray suscripciones)
 
 
 
-bool adminDB::guardarNotificaciones(QJsonArray notificaciones)
+bool adminDB::guardarNotificaciones(const QJsonArray &notificaciones)
 {
     QSqlDatabase conn = QSqlDatabase::database(CONNECTION_NAME);
 
-    for (QJsonValue valor : notificaciones)
+    for (const QJsonValue &valor : notificaciones)
     {
         QJsonObject notif = valor.toObject();
         QSqlQuery query(conn);
@@ -577,6 +591,8 @@ bool adminDB::obtenerUltimoUsuario(QString &nombre, QString &email)
 
 bool adminDB::generarNotificacionesVencimiento()
 {
+    // Busca suscripciones cercanas al vencimiento y genera avisos locales,
+    // evitando duplicados sin leer para no saturar al usuario.
     QSqlDatabase conn = QSqlDatabase::database(CONNECTION_NAME);
 
     QSqlQuery buscar(conn);
@@ -605,10 +621,6 @@ bool adminDB::generarNotificacionesVencimiento()
             "Tu suscripcion " + nombre +
             " vence el " + vencimiento;
 
-        qDebug() << "Generando notificacion para usuario:"
-                 << idUsuario
-                 << "mensaje:"
-                 << mensaje;
 
         QSqlQuery existe(conn);
 
@@ -633,7 +645,7 @@ bool adminDB::generarNotificacionesVencimiento()
 
         if (existe.next() && existe.value(0).toInt() > 0)
         {
-            qDebug() << "Notificacion duplicada, no se inserta.";
+            // Si ya existe una notificacion igual sin leer, no se duplica.
             continue;
         }
 
@@ -661,7 +673,8 @@ bool adminDB::generarNotificacionesVencimiento()
 
 bool adminDB::renovarSuscripcionesVencidas()
 {
-    qDebug() << "=== RENOVANDO SUSCRIPCIONES VENCIDAS ===";
+    // Si una suscripcion ya vencio, calcula el siguiente vencimiento segun
+    // frecuencia y la marca como pendiente de sincronizar.
 
     QSqlDatabase conn = QSqlDatabase::database(CONNECTION_NAME);
 
@@ -679,17 +692,11 @@ bool adminDB::renovarSuscripcionesVencidas()
 
     if (!buscar.exec())
     {
-        qDebug() << "Error buscando suscripciones vencidas:"
-                 << buscar.lastError().text();
         return false;
     }
 
     while (buscar.next())
     {
-        qDebug() << "Suscripcion vencida encontrada:"
-                 << buscar.value("nombre").toString()
-                 << buscar.value("vencimiento").toString()
-                 << buscar.value("frecuencia").toString();
 
         int idLocal = buscar.value("id_suscripcion_local").toInt();
         QString nombre = buscar.value("nombre").toString();
@@ -699,23 +706,24 @@ bool adminDB::renovarSuscripcionesVencidas()
         QDate vencimiento = QDate::fromString(vencimientoTexto, Qt::ISODate);
         QDate nuevoVencimiento = vencimiento;
 
+        QDate hoy = QDate::currentDate();
+
+        // Se avanza hasta una fecha futura. Esto cubre el caso de una
+        // suscripcion vencida hace varios meses o semanas.
         if (frecuencia == "mensual")
         {
-            nuevoVencimiento = vencimiento.addMonths(1);
+            while (nuevoVencimiento < hoy)
+                nuevoVencimiento = nuevoVencimiento.addMonths(1);
         }
         else if (frecuencia == "semanal")
         {
-            nuevoVencimiento = vencimiento.addDays(7);
+            while (nuevoVencimiento < hoy)
+                nuevoVencimiento = nuevoVencimiento.addDays(7);
         }
         else if (frecuencia == "anual")
         {
-            nuevoVencimiento = vencimiento.addYears(1);
-        }
-        else
-        {
-            qDebug() << "Frecuencia desconocida en suscripcion:"
-                     << nombre << frecuencia;
-            continue;
+            while (nuevoVencimiento < hoy)
+                nuevoVencimiento = nuevoVencimiento.addYears(1);
         }
 
         QSqlQuery actualizar(conn);
@@ -733,15 +741,9 @@ bool adminDB::renovarSuscripcionesVencidas()
 
         if (!actualizar.exec())
         {
-            qDebug() << "Error renovando suscripcion vencida:"
-                     << actualizar.lastError().text();
             return false;
         }
 
-        qDebug() << "Suscripcion renovada:"
-                 << nombre
-                 << "de" << vencimientoTexto
-                 << "a" << nuevoVencimiento.toString(Qt::ISODate);
     }
 
     return true;

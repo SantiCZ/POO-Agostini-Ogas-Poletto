@@ -16,6 +16,17 @@
 #include "datamanager.h"
 #include "admindb.h"
 
+/*
+ * Punto de entrada de la aplicacion.
+ * Configura Qt, abre la base SQLite, muestra el login y luego carga la ventana
+ * principal si el usuario se autentica correctamente.
+ *
+ * Flujo de arranque:
+ * 1. Configurar Qt.
+ * 2. Abrir SQLite.
+ * 3. Mostrar login.
+ * 4. Abrir MainWidget.
+ */
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
 
@@ -29,6 +40,8 @@ int main(int argc, char *argv[]) {
     app.setApplicationName("AlcancIA");
     app.setApplicationVersion("1.0.0");
 
+    // Si SQLite no abre, la app no puede operar porque toda la UI depende de
+    // la base local para cache, reportes y modo offline.
     // ── 1. Conexión SQLite ───────────────────────────────────────────
     adminDB dbProyecto;
     QString rutaDB = QFileInfo(__FILE__).absolutePath() + "/tasty_alcancia.db";
@@ -37,25 +50,15 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    qDebug() << "SQLite conectado en:" << rutaDB;
-    qDebug() << "Ruta absoluta SQLite:" << QFileInfo(rutaDB).absoluteFilePath();
-    qDebug() << "Existe SQLite:" << QFileInfo(rutaDB).exists();
 
-    QString ultimoNombre;
-    QString ultimoEmail;
-
-    if (dbProyecto.obtenerUltimoUsuario(ultimoNombre, ultimoEmail))
-    {
-        qDebug() << "Ultimo usuario usado:"
-                 << ultimoNombre
-                 << ultimoEmail;
-    }
 
     // ── 2. Login ─────────────────────────────────────────────────────
     LoginDialog login;
     if (login.exec() != QDialog::Accepted)
         return 0;
 
+    // El login ya dispara la sincronizacion desde DataManager cuando el VPS
+    // responde OK; por eso aqui solo se decide si abrir o no la ventana.
     // ── 3. Sincronización post-login ─────────────────────────────────
     // CORREGIDO: no llamar sincronizarDesdeServidor() acá con ID hardcodeado.
     // El login real via loginRed() ya dispara sincronizarDesdeServidor()

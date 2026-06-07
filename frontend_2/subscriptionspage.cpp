@@ -11,7 +11,6 @@
 #include <QDateEdit>
 #include <QComboBox>
 #include <QMessageBox>
-#include <algorithm>
 #include <QDebug>
 
 SubCard::SubCard(const Suscripcion &sub, QWidget *parent)
@@ -275,7 +274,7 @@ void SubscriptionsPage::refreshData()
         delete item;
     }
 
-    QVector<Suscripcion> subs = DataManager::instance().getSuscripciones();
+    const QVector<Suscripcion> subs = DataManager::instance().getSuscripciones();
 
     double total = 0;
     for (const Suscripcion &s : subs) {
@@ -292,12 +291,12 @@ void SubscriptionsPage::addSubCard(const Suscripcion &s)
     auto *card = new SubCard(s, this);
 
     connect(card, &SubCard::toggleRequested, this,
-            [this](int id, bool activa) {
+            [](int id, bool activa) {
                 DataManager::instance().updateSuscripcionEstado(id, activa);
             });
 
     connect(card, &SubCard::deleteRequested, this,
-            [this](int id) {
+            [](int id) {
                 DataManager::instance().removeSuscripcion(id);
             });
 
@@ -314,7 +313,7 @@ void SubscriptionsPage::onAddClicked()
 
 void SubscriptionsPage::onEditClicked(int id)
 {
-    QVector<Suscripcion> subs = DataManager::instance().getSuscripciones();
+    const QVector<Suscripcion> subs = DataManager::instance().getSuscripciones();
     Suscripcion actual;
     bool encontrada = false;
     for (const Suscripcion &s : subs) {

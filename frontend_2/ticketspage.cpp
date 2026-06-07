@@ -222,7 +222,7 @@ void TicketsPage::applyFilter()
     QString busqueda =
         m_searchEdit->text();
 
-    QVector<Ticket> tickets =
+    const QVector<Ticket> tickets =
         DataManager::instance()
             .getTickets(
                 categoria,

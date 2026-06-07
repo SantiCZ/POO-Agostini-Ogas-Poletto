@@ -8,6 +8,20 @@
 #include <QJsonArray>
 #include <QByteArray>
 
+/*
+ * adminDB
+ * Responsabilidad de clase:
+ * Encapsula la conexion y las operaciones directas contra SQLite.
+ * La interfaz y el resto de la app no ejecutan SQL directamente; delegan en
+ * esta clase para mantener separada la persistencia local.
+ *
+ * Herencia:
+ * Hereda de QObject para integrarse con Qt y permitir propiedad de objetos.
+ *
+ * Clases abstractas:
+ * No es abstracta: contiene implementaciones concretas de conexion, creacion
+ * de tablas y consultas SQL.
+ */
 class adminDB : public QObject
 {
     Q_OBJECT
@@ -15,27 +29,36 @@ class adminDB : public QObject
 public:
     explicit adminDB(QObject *parent = nullptr);
 
+    // Abre o crea la base local y prepara las tablas necesarias.
     bool conectar(QString archivoSqlite);
+
+    // Devuelve la conexion compartida para consultas puntuales.
     QSqlDatabase getDB();
 
+    // Limpia datos del usuario activo antes de cargar una nueva sincronizacion.
     bool limpiarBaseDeDatos();
+
+    // Convierte el JSON recibido del VPS en registros SQLite locales.
     bool sincronizarDesdeJson(QByteArray datosJson);
 
+    // Guardado por tipo de entidad. Cada metodo conoce el esquema de su tabla.
     bool guardarUsuarioSesion(QJsonObject usuario);
-    bool guardarCategorias(QJsonArray categorias);
-    bool guardarGastos(QJsonArray gastos);
-    bool guardarSuscripciones(QJsonArray suscripciones);
+    bool guardarCategorias(const QJsonArray &categorias);
+    bool guardarGastos(const QJsonArray &gastos);
+    bool guardarSuscripciones(const QJsonArray &suscripciones);
+    bool guardarNotificaciones(const QJsonArray &notificaciones);
+
+    // Recupera datos de sesion y mantiene alertas de vencimientos.
     bool obtenerUltimoUsuario(QString &nombre, QString &email);
-    bool guardarNotificaciones(QJsonArray notificaciones);
     bool generarNotificacionesVencimiento();
     bool renovarSuscripcionesVencidas();
 
 private:
-    // nuevo: nombre fijo de conexion para que todos reutilicen la misma
-    // antes se usaba el nombre por defecto (qt_sql_default_connection) que
-    // se destruia cada vez que se creaba un nuevo adminDB en cualquier lugar
+    // Atributo importante: nombre fijo de conexion SQLite.
+    // Evita que distintas instancias creen conexiones separadas e inconsistentes.
     static const QString CONNECTION_NAME;
 
+    // Atributo importante: objeto de conexion local a SQLite.
     QSqlDatabase db;
 };
 

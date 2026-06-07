@@ -1,8 +1,20 @@
 #pragma once
+
 #include <QString>
 
+/*
+ * StyleManager
+ * Responsabilidad de clase:
+ * Clase utilitaria que concentra los estilos QSS de la aplicacion.
+ * Evita duplicar cadenas de estilos en cada pantalla y mantiene una paleta
+ * visual consistente.
+ *
+ * Clases abstractas:
+ * No es abstracta; es una clase utilitaria con metodos static y constantes.
+ */
 class StyleManager {
 public:
+    // Hojas de estilo reutilizables por tipo de componente.
     static QString appStyleSheet();
     static QString cardStyle(const QString &accent = "#4ADE80");
     static QString primaryButtonStyle();
@@ -10,9 +22,9 @@ public:
     static QString dangerButtonStyle();
     static QString inputStyle();
     static QString sidebarStyle();
-    static QString logoutButtonStyle();  // ← nuevo método
+    static QString logoutButtonStyle();  // nuevo metodo
 
-    // Paleta de colores
+    // Paleta de colores base de la interfaz.
     static constexpr const char* BG_DARK    = "#0F1117";
     static constexpr const char* BG_CARD    = "#1A1D27";
     static constexpr const char* BG_SURFACE = "#21253A";

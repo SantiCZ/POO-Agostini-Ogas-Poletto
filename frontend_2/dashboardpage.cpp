@@ -300,7 +300,7 @@ void DashboardPage::refreshData()
     int year = now.year();
     int month = now.month();
 
-    QVector<Ticket> tickets = DataManager::instance().getTickets();
+    const QVector<Ticket> tickets = DataManager::instance().getTickets();
     double gastoMes = 0.0;
     int ticketCount = 0;
     for (const Ticket &t : tickets) {
@@ -312,7 +312,7 @@ void DashboardPage::refreshData()
 
     int subsActivas = 0;
     int proximas = 0;
-    QVector<Suscripcion> suscripciones = DataManager::instance().getSuscripciones();
+    const QVector<Suscripcion> suscripciones = DataManager::instance().getSuscripciones();
     for (const Suscripcion &s : suscripciones) {
         if (s.activa) {
             subsActivas++;
@@ -442,7 +442,7 @@ void DashboardPage::buildSubsAlert(QVBoxLayout *layout)
     cardL->setContentsMargins(0, 8, 0, 8);
     cardL->setSpacing(0);
 
-    QVector<Suscripcion> suscripciones = DataManager::instance().getSuscripciones();
+    const QVector<Suscripcion> suscripciones = DataManager::instance().getSuscripciones();
     QVector<Suscripcion> activas;
     for (const Suscripcion &s : suscripciones) {
         if (s.activa) activas.append(s);

@@ -18,6 +18,16 @@
 #include <QEventLoop>
 #include <QTimer>
 
+/*
+ * datamanager.cpp
+ * Implementa la capa de coordinacion entre UI, SQLite y servidor.
+ * Aqui se concentran los flujos asincronicos de red y la conversion de datos
+ * entre modelos C++, JSON y registros locales.
+ *
+ * Flujo general:
+ * UI -> DataManager -> SQLite/VPS -> signals -> UI.
+ */
+
 // ─────────────────────────────────────────
 // CONSTRUCTOR
 // ─────────────────────────────────────────
@@ -25,10 +35,14 @@
 DataManager::DataManager()
     : QObject(nullptr)
 {
+    // Todas las respuestas HTTP vuelven a onRespuestaRecibida para mantener
+    // un unico punto de control del estado de red.
     networkManager = new QNetworkAccessManager(this);
     connect(networkManager, &QNetworkAccessManager::finished,
             this, &DataManager::onRespuestaRecibida);
 
+    // DataManager abre la misma base local que usa el arranque. Asi la app
+    // puede consultar cache offline y luego sincronizar contra el VPS.
     QString rutaDB = QFileInfo(__FILE__).absolutePath() + "/tasty_alcancia.db";
     m_db.conectar(rutaDB);
 }
@@ -60,6 +74,15 @@ void DataManager::cambiarEstadoRed(EstadoRed nuevoEstado)
 {
     estadoActual = nuevoEstado;
     emit estadoRedCambiado(estadoActual);
+}
+
+// ─────────────────────────────────────────
+// BASE DE DATOS
+// ─────────────────────────────────────────
+
+QSqlDatabase DataManager::getDB()
+{
+    return m_db.getDB();
 }
 
 // ─────────────────────────────────────────
@@ -110,6 +133,8 @@ void DataManager::sincronizarDesdeServidor(int id_usuario)
 
 void DataManager::sincronizarSuscripcionesLocales()
 {
+    // Recorre suscripciones con cambios locales y las envia al VPS.
+    // Al terminar, el servidor queda como fuente comun para otros dispositivos.
     int usuarioId = getUsuarioActivoId();
     if (usuarioId < 0) {
         qDebug() << "No hay usuario activo para sincronizar.";
@@ -159,7 +184,6 @@ void DataManager::sincronizarSuscripcionesLocales()
     }
 
     if (subsArray.isEmpty()) {
-        qDebug() << "No hay suscripciones pendientes para sincronizar.";
         emit syncSuscripcionesLocalesCompletada(true);
         return;
     }
@@ -202,9 +226,14 @@ bool DataManager::haySuscripcionesPendientes()
 
 bool DataManager::syncSuscripcionesLocalesAndWait(int timeoutMs)
 {
+    // SIGNAL/SLOT:
+    // Se conecta temporalmente a syncSuscripcionesLocalesCompletada para salir
+    // del EventLoop cuando termina la red. Esto adapta un flujo asincronico a
+    // una espera controlada durante cierre/logout.
+    // Qt usa red asincronica; para cierre de app se usa un EventLoop temporal
+    // que espera la senal de finalizacion o corta por timeout.
     // Si no hay cambios pendientes, salimos inmediatamente
     if (!haySuscripcionesPendientes()) {
-        qDebug() << "No hay cambios pendientes, omitiendo sincronización.";
         return true;
     }
 
@@ -235,17 +264,36 @@ bool DataManager::syncSuscripcionesLocalesAndWait(int timeoutMs)
 
 void DataManager::onRespuestaRecibida(QNetworkReply *reply)
 {
-    if (reply->error() != QNetworkReply::NoError) {
-        emit errorDeRed("Error de red: " + reply->errorString());
+    // SLOT:
+    // Este metodo es slot de QNetworkAccessManager::finished. Procesa login,
+    // sync, tickets y suscripciones segun la ruta del API.
+    // Todas las rutas del API se discriminan por path para actualizar modelos,
+    // base local y senales de UI segun la operacion que respondio.
+    QByteArray responseData = reply->readAll();
+    QString path = reply->url().path();
+
+    int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+
+    if (reply->error() != QNetworkReply::NoError)
+    {
+        qDebug() << "ERROR HTTP:" << httpStatus;
+        qDebug() << "ERROR RED:" << reply->errorString();
+        qDebug() << "RESPUESTA ERROR:" << responseData;
+
+        // Caso especial: login con usuario o contraseña incorrectos
+        if (path.contains("/login") && (httpStatus == 401 || httpStatus == 403))
+        {
+            emit loginFallido("Email o contraseña incorrectos.");
+        }
+        else
+        {
+            emit errorDeRed("No se pudo conectar con el servidor. Verificá tu conexión.");
+        }
+
         cambiarEstadoRed(ERROR_CONEXION);
         reply->deleteLater();
         return;
     }
-
-    QByteArray responseData = reply->readAll();
-    QString path = reply->url().path();
-    qDebug() << "URL:" << path;
-    qDebug() << "RESPUESTA:" << responseData;
 
     // ─── LOGIN ───────────────────────────────────
     if (path.contains("/login")) {
@@ -254,8 +302,9 @@ void DataManager::onRespuestaRecibida(QNetworkReply *reply)
             QJsonObject usuario = root["usuario"].toObject();
             int idUsuario = usuario["id_usuario"].toInt();
             QString nombre = usuario["nombre"].toString();
-            qDebug() << "Login VPS OK. usuario:" << nombre << "id:" << idUsuario;
 
+            // El login remoto tambien actualiza la sesion local. Esa sesion se
+            // usa luego para filtrar SQLite y permitir operaciones offline.
             QSqlQuery query(m_db.getDB());
             query.prepare(R"(
                 INSERT OR REPLACE INTO usuario_sesion
@@ -269,6 +318,9 @@ void DataManager::onRespuestaRecibida(QNetworkReply *reply)
 
             m_pendingUserId   = idUsuario;
             m_pendingUsername = nombre;
+
+            // Despues de autenticar, se baja el estado completo del usuario.
+            // Cuando termina, esta misma funcion emite las senales de refresco.
             sincronizarDesdeServidor(idUsuario);
             emit loginExitoso(idUsuario, nombre);
         } else {
@@ -279,14 +331,33 @@ void DataManager::onRespuestaRecibida(QNetworkReply *reply)
     // ─── SINCRONIZACIÓN DE SUSCRIPCIONES LOCALES ───
     else if (path.contains("/suscripciones/sync")) {
         QJsonObject root = QJsonDocument::fromJson(responseData).object();
+
         if (root["status"].toString() == "ok") {
-            qDebug() << "Cambios locales de suscripciones sincronizados con VPS.";
+            // Una vez que el VPS acepta los cambios locales, se limpian marcas
+            // de sincronizacion para no reenviar la misma suscripcion.
+            QSqlQuery limpiar(m_db.getDB());
+            limpiar.prepare(R"(
+            UPDATE suscripciones
+            SET sincronizado = 1,
+                accion_pendiente = 'ninguna'
+            WHERE sincronizado = 0
+            OR accion_pendiente != 'ninguna'
+        )");
+
+            if (!limpiar.exec()) {
+                qDebug() << "Error limpiando pendientes despues del sync:"
+                         << limpiar.lastError().text();
+            }
+
             int idUsuario = getUsuarioActivoId();
             if (idUsuario > 0) {
+                // Se vuelve a bajar el estado remoto para que SQLite quede
+                // alineado con el servidor despues del envio.
                 sincronizarDesdeServidor(idUsuario);
             }
+
             emit syncSuscripcionesLocalesCompletada(true);
-        } else {
+        }else {
             emit errorDeRed("Error sincronizando suscripciones: " + root["message"].toString());
             emit syncSuscripcionesLocalesCompletada(false);
             cambiarEstadoRed(ERROR_CONEXION);
@@ -295,11 +366,11 @@ void DataManager::onRespuestaRecibida(QNetworkReply *reply)
     // ─── SYNC GENERAL ───────────────────────────
     else if (path.contains("/sync")) {
         if (m_db.sincronizarDesdeJson(responseData)) {
-            qDebug() << "Llamando renovarSuscripcionesVencidas...";
+            // Al terminar la carga desde servidor, se aplican reglas locales
+            // derivadas: renovar vencidas, generar avisos y refrescar UI.
             m_db.renovarSuscripcionesVencidas();
             m_db.generarNotificacionesVencimiento();
             cargarNotificacionesDesdeSQLite();
-            qDebug() << "Sincronizacion OK";
             emit sincronizacionCompletada();
             emit ticketsChanged();
             emit suscripcionesChanged();
@@ -326,12 +397,26 @@ void DataManager::onRespuestaRecibida(QNetworkReply *reply)
     // ─── GUARDAR SUSCRIPCION ─────────────────────
     else if (path.contains("/suscripciones/guardar")) {
         QJsonObject root = QJsonDocument::fromJson(responseData).object();
-        qDebug() << "RESPUESTA SUSCRIPCION:" << root;
         int idUsuario = getUsuarioActivoId();
+        QSqlQuery limpiar(m_db.getDB());
+        limpiar.prepare(R"(
+            UPDATE suscripciones
+            SET sincronizado = 1,
+                accion_pendiente = 'ninguna'
+            WHERE sincronizado = 0
+            OR accion_pendiente != 'ninguna'
+        )");
+
+        if (!limpiar.exec()) {
+            qDebug() << "Error limpiando pendientes despues del sync:"
+                     << limpiar.lastError().text();
+        }
+
         if (idUsuario > 0) {
             sincronizarDesdeServidor(idUsuario);
         }
-        cambiarEstadoRed(EXITO);
+
+        emit syncSuscripcionesLocalesCompletada(true);
     }
     // ─── REGISTRO ────────────────────────────────
     else if (path.contains("/registro")) {
@@ -439,7 +524,6 @@ void DataManager::guardarSuscripcionRed(const Suscripcion& s)
     json["actividad"]    = s.activa ? 1 : 0;
     json["notas"]        = "";
 
-    qDebug() << "ENVIANDO SUSCRIPCION:" << QJsonDocument(json).toJson(QJsonDocument::Indented);
     networkManager->post(request, QJsonDocument(json).toJson());
 }
 
@@ -520,6 +604,8 @@ bool DataManager::addTicket(const Ticket& t)
         return false;
     }
 
+    // Primero se guarda localmente para que la UI responda rapido. Despues se
+    // arma el JSON completo y se envia al servidor para sincronizar.
     QJsonObject jsonRaiz;
     jsonRaiz.insert("id_usuario", usuarioId);
     QJsonObject gastoObj;
@@ -629,6 +715,9 @@ bool DataManager::addSuscripcion(const Suscripcion& s)
         qDebug() << "No hay usuario activo.";
         return false;
     }
+
+    // Las suscripciones nuevas se envian al VPS; la respuesta remota vuelve a
+    // marcar el registro local como sincronizado desde onRespuestaRecibida().
     guardarSuscripcionRed(s);
     return true;
 }
@@ -647,6 +736,47 @@ bool DataManager::updateSuscripcionEstado(int id, bool activa)
         qDebug() << query.lastError().text();
         return false;
     }
+    emit suscripcionesChanged();
+    return true;
+}
+
+bool DataManager::updateSuscripcion(const Suscripcion &s)
+{
+    int usuarioId = getUsuarioActivoId();
+    if (usuarioId < 0) {
+        qDebug() << "No hay usuario activo para editar suscripcion.";
+        return false;
+    }
+
+    QSqlQuery query(m_db.getDB());
+    query.prepare(R"(
+        UPDATE suscripciones
+        SET nombre = :nombre,
+            monto = :monto,
+            vencimiento = :vencimiento,
+            alerta = :alerta,
+            sincronizado = 0,
+            accion_pendiente = 'editar'
+        WHERE id_suscripcion_local = :id
+        AND id_usuario_remoto = :uid
+    )");
+    query.bindValue(":nombre", s.nombreServicio);
+    query.bindValue(":monto", s.monto);
+    query.bindValue(":vencimiento", s.fechaVencimiento.toString(Qt::ISODate));
+    query.bindValue(":alerta", s.diasAviso);
+    query.bindValue(":id", s.id);
+    query.bindValue(":uid", usuarioId);
+
+    if (!query.exec()) {
+        qDebug() << "Error updateSuscripcion:" << query.lastError().text();
+        return false;
+    }
+
+    if (query.numRowsAffected() == 0) {
+        qDebug() << "No se encontro la suscripcion para editar.";
+        return false;
+    }
+
     emit suscripcionesChanged();
     return true;
 }
@@ -687,6 +817,12 @@ int DataManager::getSuscripcionesActivas()
     if (query.exec() && query.next())
         return query.value(0).toInt();
     return 0;
+}
+
+void DataManager::renovarSuscripcionesVencidasLocales()
+{
+    m_db.renovarSuscripcionesVencidas();
+    emit suscripcionesChanged();
 }
 
 // ─────────────────────────────────────────
@@ -741,6 +877,18 @@ bool DataManager::userExists(const QString& username)
     if (!query.exec() || !query.next())
         return false;
     return query.value("nombre").toString().compare(username, Qt::CaseInsensitive) == 0;
+}
+
+QString DataManager::getUltimoEmail() const
+{
+    QSettings settings("AlcancIA", "Login");
+    return settings.value("ultimoEmail").toString();
+}
+
+void DataManager::setUltimoEmail(const QString &email)
+{
+    QSettings settings("AlcancIA", "Login");
+    settings.setValue("ultimoEmail", email);
 }
 
 // ─────────────────────────────────────────
@@ -832,58 +980,6 @@ QVector<QPair<QString,double>> DataManager::getGastosPorSemana(int year, int mon
     return resultado;
 }
 
-QSqlDatabase DataManager::getDB()
-{
-    return m_db.getDB();
-}
-
-// ─────────────────────────────────────────
-// EDICIÓN DE SUSCRIPCIONES
-// ─────────────────────────────────────────
-
-bool DataManager::updateSuscripcion(const Suscripcion &s)
-{
-    int usuarioId = getUsuarioActivoId();
-    if (usuarioId < 0) {
-        qDebug() << "No hay usuario activo para editar suscripcion.";
-        return false;
-    }
-
-    qDebug() << "EDITANDO SUSCRIPCION ID:" << s.id << "USUARIO ACTIVO:" << usuarioId;
-
-    QSqlQuery query(m_db.getDB());
-    query.prepare(R"(
-        UPDATE suscripciones
-        SET nombre = :nombre,
-            monto = :monto,
-            vencimiento = :vencimiento,
-            alerta = :alerta,
-            sincronizado = 0,
-            accion_pendiente = 'editar'
-        WHERE id_suscripcion_local = :id
-        AND id_usuario_remoto = :uid
-    )");
-    query.bindValue(":nombre", s.nombreServicio);
-    query.bindValue(":monto", s.monto);
-    query.bindValue(":vencimiento", s.fechaVencimiento.toString(Qt::ISODate));
-    query.bindValue(":alerta", s.diasAviso);
-    query.bindValue(":id", s.id);
-    query.bindValue(":uid", usuarioId);
-
-    if (!query.exec()) {
-        qDebug() << "Error updateSuscripcion:" << query.lastError().text();
-        return false;
-    }
-
-    qDebug() << "Filas afectadas:" << query.numRowsAffected();
-    if (query.numRowsAffected() == 0) {
-        qDebug() << "No se encontro la suscripcion para editar.";
-        return false;
-    }
-
-    emit suscripcionesChanged();
-    return true;
-}
 
 // ─────────────────────────────────────────
 // NOTIFICACIONES
@@ -900,24 +996,10 @@ void DataManager::agregarNotificacion(const Notificacion &n)
     emit notificacionesChanged();
 }
 
-// ─────────────────────────────────────────
-// RECORDAR USUARIO
-// ─────────────────────────────────────────
-
-QString DataManager::getUltimoEmail() const
-{
-    QSettings settings("AlcancIA", "Login");
-    return settings.value("ultimoEmail").toString();
-}
-
-void DataManager::setUltimoEmail(const QString &email)
-{
-    QSettings settings("AlcancIA", "Login");
-    settings.setValue("ultimoEmail", email);
-}
-
 void DataManager::cargarNotificacionesDesdeSQLite()
 {
+    // Este metodo reconstruye el cache en memoria desde SQLite. Se llama luego
+    // de sincronizar para que la campanita y el panel muestren datos actuales.
     m_notificaciones.clear();
     int usuarioId = getUsuarioActivoId();
     QSqlQuery query(m_db.getDB());
@@ -942,9 +1024,4 @@ void DataManager::cargarNotificacionesDesdeSQLite()
     emit notificacionesChanged();
 }
 
-void DataManager::renovarSuscripcionesVencidasLocales()
-{
-    qDebug() << "Llamando renovarSuscripcionesVencidas desde DataManager";
-    m_db.renovarSuscripcionesVencidas();
-    emit suscripcionesChanged();
-}
+
