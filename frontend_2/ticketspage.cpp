@@ -6,6 +6,7 @@
 
 #include <QGraphicsDropShadowEffect>
 #include <QMessageBox>
+#include <QScrollArea>
 
 TicketCard::TicketCard(
     const Ticket &ticket,
@@ -14,6 +15,7 @@ TicketCard::TicketCard(
 {
     setFixedHeight(88);
     setObjectName("ticketCard");
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
     setCursor(Qt::PointingHandCursor);
 
@@ -186,9 +188,12 @@ void TicketsPage::setupUI()
 {
     QVBoxLayout *mainL =
         new QVBoxLayout(this);
+    mainL->setContentsMargins(32, 28, 32, 32);
+    mainL->setSpacing(16);
 
     m_searchEdit =
         new QLineEdit();
+    m_searchEdit->setPlaceholderText("Buscar comercio...");
 
     m_filterCombo =
         new QComboBox();
@@ -204,19 +209,33 @@ void TicketsPage::setupUI()
 
     m_countLabel =
         new QLabel("0 registros");
+    m_countLabel->setStyleSheet("color: #64748B; font-size: 13px; font-weight: 500; background: transparent;");
+
+    // Scroll Area para la lista de tickets
+    QScrollArea *scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setStyleSheet("background: transparent;");
 
     m_ticketListWidget =
         new QWidget();
+    m_ticketListWidget->setStyleSheet("background: transparent;");
 
     m_ticketListLayout =
         new QVBoxLayout(
             m_ticketListWidget
             );
+    m_ticketListLayout->setContentsMargins(0, 0, 0, 0);
+    m_ticketListLayout->setSpacing(12);
+
+    scroll->setWidget(m_ticketListWidget);
 
     mainL->addWidget(m_searchEdit);
     mainL->addWidget(m_filterCombo);
     mainL->addWidget(m_countLabel);
-    mainL->addWidget(m_ticketListWidget);
+    mainL->addWidget(scroll, 1);
 }
 
 void TicketsPage::refreshData()
@@ -255,6 +274,8 @@ void TicketsPage::applyFilter()
     {
         addTicketCard(t);
     }
+
+    m_ticketListLayout->addStretch();
 
     m_countLabel->setText(
         QString("%1 registros")
