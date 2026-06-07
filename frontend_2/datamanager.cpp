@@ -730,6 +730,8 @@ bool DataManager::updateSuscripcionEstado(int id, bool activa)
         return false;
     }
     emit suscripcionesChanged();
+    m_db.generarNotificacionesVencimiento();
+    cargarNotificacionesDesdeSQLite();
     return true;
 }
 
@@ -771,6 +773,8 @@ bool DataManager::updateSuscripcion(const Suscripcion &s)
     }
 
     emit suscripcionesChanged();
+    m_db.generarNotificacionesVencimiento();
+    cargarNotificacionesDesdeSQLite();
     return true;
 }
 
@@ -793,6 +797,8 @@ bool DataManager::removeSuscripcion(int id)
         return false;
     }
     emit suscripcionesChanged();
+    m_db.generarNotificacionesVencimiento();
+    cargarNotificacionesDesdeSQLite();
     return true;
 }
 

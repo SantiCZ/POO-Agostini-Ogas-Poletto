@@ -141,6 +141,9 @@ void MainWidget::setupUI() {
                 updateNotifBadge();
             });
 
+    connect(&DataManager::instance(), &DataManager::notificacionesChanged,
+            this, &MainWidget::updateNotifBadge);
+
     // CORRECCIÓN: "Ver todo" de Tickets: solo navegar, NO abrir diálogo
     connect(m_dashboard, &DashboardPage::navigateToTickets, this, [this]() {
         m_sidebar->setActivePage(1);

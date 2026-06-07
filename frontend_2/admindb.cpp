@@ -597,6 +597,13 @@ bool adminDB::generarNotificacionesVencimiento()
         return false;
     }
 
+    QStringList mensajesValidos;
+    struct NotifInfo {
+        int idUsuario;
+        QString mensaje;
+    };
+    QVector<NotifInfo> aGenerar;
+
     while (buscar.next())
     {
         int idUsuario = buscar.value("id_usuario_remoto").toInt();
@@ -607,7 +614,34 @@ bool adminDB::generarNotificacionesVencimiento()
             "Tu suscripcion " + nombre +
             " vence el " + vencimiento;
 
+        mensajesValidos << mensaje;
+        aGenerar.append({idUsuario, mensaje});
+    }
 
+    // Limpiar notificaciones de vencimiento obsoletas (no leídas) que ya no aplican.
+    QSqlQuery limpiar(conn);
+    if (mensajesValidos.isEmpty()) {
+        limpiar.prepare("DELETE FROM notificaciones WHERE tipo = 'vencimiento' AND leida = 0");
+        limpiar.exec();
+    } else {
+        QString queryStr = "DELETE FROM notificaciones WHERE tipo = 'vencimiento' AND leida = 0";
+        QStringList placeholders;
+        for (int i = 0; i < mensajesValidos.size(); ++i) {
+            placeholders << QString(":msg%1").arg(i);
+        }
+        queryStr += " AND mensaje NOT IN (" + placeholders.join(", ") + ")";
+        limpiar.prepare(queryStr);
+        for (int i = 0; i < mensajesValidos.size(); ++i) {
+            limpiar.bindValue(QString(":msg%1").arg(i), mensajesValidos[i]);
+        }
+        if (!limpiar.exec()) {
+            qDebug() << "Error limpiando notificaciones obsoletas:" << limpiar.lastError().text();
+        }
+    }
+
+    // Ahora insertar las que no existan aun
+    for (const auto &info : aGenerar)
+    {
         QSqlQuery existe(conn);
 
         existe.prepare(R"(
@@ -619,8 +653,8 @@ bool adminDB::generarNotificacionesVencimiento()
             AND leida = 0
         )");
 
-        existe.bindValue(":uid", idUsuario);
-        existe.bindValue(":mensaje", mensaje);
+        existe.bindValue(":uid", info.idUsuario);
+        existe.bindValue(":mensaje", info.mensaje);
 
         if (!existe.exec())
         {
@@ -643,8 +677,8 @@ bool adminDB::generarNotificacionesVencimiento()
             VALUES (:uid, 'vencimiento', :mensaje, 0, datetime('now'))
         )");
 
-        insertar.bindValue(":uid", idUsuario);
-        insertar.bindValue(":mensaje", mensaje);
+        insertar.bindValue(":uid", info.idUsuario);
+        insertar.bindValue(":mensaje", info.mensaje);
 
         if (!insertar.exec())
         {
