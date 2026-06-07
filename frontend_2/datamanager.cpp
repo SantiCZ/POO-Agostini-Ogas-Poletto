@@ -398,10 +398,16 @@ void DataManager::onRespuestaRecibida(QNetworkReply *reply)
 
         // Flujo correcto:
         // 1) Guardar nueva suscripción en VPS.
-        // 2) Enviar pendientes locales: editar/eliminar.
-        // 3) Recién después hacer sync general desde VPS.
+        // 2) Enviar pendientes locales si los hay; de lo contrario descargar desde VPS.
         if (root["status"].toString() == "ok") {
-            sincronizarSuscripcionesLocales();
+            if (haySuscripcionesPendientes()) {
+                sincronizarSuscripcionesLocales();
+            } else {
+                int idUsuario = getUsuarioActivoId();
+                if (idUsuario > 0) {
+                    sincronizarDesdeServidor(idUsuario);
+                }
+            }
         } else {
             emit errorDeRed("Error guardando suscripción: " + root["message"].toString());
             cambiarEstadoRed(ERROR_CONEXION);
