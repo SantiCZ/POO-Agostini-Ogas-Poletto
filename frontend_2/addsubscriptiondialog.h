@@ -30,7 +30,6 @@ public:
     double  monto() const;
     QDate   fechaVencimiento() const;
     int     diasAviso() const;
-    QString categoria() const;
     QString iconoNombre() const;
 
 private:
@@ -43,7 +42,6 @@ private:
     QDoubleSpinBox *m_montoSpin     = nullptr;
     QDateEdit      *m_fechaEdit     = nullptr;
     QSpinBox       *m_diasSpin      = nullptr;
-    QComboBox      *m_catCombo      = nullptr;
     QPushButton    *m_saveBtn       = nullptr;
     QPushButton    *m_cancelBtn     = nullptr;
 };

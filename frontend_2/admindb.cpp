@@ -111,7 +111,6 @@ bool adminDB::conectar(QString archivoSqlite)
                 id_suscripcion_local INTEGER PRIMARY KEY AUTOINCREMENT,
                 id_suscripcion_remota INTEGER,
                 id_usuario_remoto INTEGER NOT NULL,
-                id_categoria_remota INTEGER,
                 nombre TEXT NOT NULL,
                 monto REAL NOT NULL,
                 moneda TEXT DEFAULT 'ARS',
@@ -400,15 +399,11 @@ bool adminDB::guardarGastos(const QJsonArray &gastos)
 
 bool adminDB::guardarSuscripciones(const QJsonArray &suscripciones)
 {
-    QSqlDatabase conn =
-        QSqlDatabase::database(CONNECTION_NAME);
-
+    QSqlDatabase conn = QSqlDatabase::database(CONNECTION_NAME);
 
     for (const QJsonValue &valor : suscripciones)
     {
         QJsonObject sub = valor.toObject();
-
-
         QSqlQuery query(conn);
 
         query.prepare(R"(
@@ -416,7 +411,6 @@ bool adminDB::guardarSuscripciones(const QJsonArray &suscripciones)
             (
                 id_suscripcion_remota,
                 id_usuario_remoto,
-                id_categoria_remota,
                 nombre,
                 monto,
                 moneda,
@@ -433,7 +427,6 @@ bool adminDB::guardarSuscripciones(const QJsonArray &suscripciones)
             (
                 :id_suscripcion,
                 :id_usuario,
-                :id_categoria,
                 :nombre,
                 :monto,
                 :moneda,
@@ -456,11 +449,6 @@ bool adminDB::guardarSuscripciones(const QJsonArray &suscripciones)
         query.bindValue(
             ":id_usuario",
             sub["id_usuario"].toInt()
-            );
-
-        query.bindValue(
-            ":id_categoria",
-            sub["id_categoria"].toInt()
             );
 
         query.bindValue(
@@ -520,8 +508,6 @@ bool adminDB::guardarSuscripciones(const QJsonArray &suscripciones)
 
     return true;
 }
-
-
 
 bool adminDB::guardarNotificaciones(const QJsonArray &notificaciones)
 {

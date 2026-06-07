@@ -187,7 +187,7 @@ void Sidebar::setupUI() {
     m_layout->addWidget(m_syncIcon, 0, Qt::AlignCenter);
     m_layout->addSpacing(6);
 
-    // Perfil de usuario (clickeable → menú solo logout)
+    // Perfil de usuario (clickeable → Cerrar sesión)
     m_profileBtn = new QPushButton();
     m_profileBtn->setFixedHeight(56);
     m_profileBtn->setCursor(Qt::PointingHandCursor);
@@ -201,7 +201,7 @@ void Sidebar::setupUI() {
         }
         QPushButton:hover {
             background-color: #21253A;
-            border: 1px solid #4ADE80;
+            border: 1px solid #F87171;
         }
         QPushButton:pressed {
             background-color: #2E3347;
@@ -212,14 +212,14 @@ void Sidebar::setupUI() {
     // Eventos de mouse:
     // El contenido interno del boton no debe capturar clicks propios; al hacerlo
     // transparente al mouse, el click llega al QPushButton padre y dispara
-    // clicked(), que luego abre el menu de perfil.
+    // clicked(), que luego emite la senal de logout.
     profileInner->setAttribute(Qt::WA_TransparentForMouseEvents);
     profileInner->setStyleSheet("background: transparent;");
     QHBoxLayout *profileL = new QHBoxLayout(profileInner);
     profileL->setContentsMargins(10, 8, 10, 8);
     profileL->setSpacing(10);
 
-    QLabel *avatar = new QLabel("👤");
+    QLabel *avatar = new QLabel("🚪");
     avatar->setFixedSize(36, 36);
     avatar->setAlignment(Qt::AlignCenter);
     avatar->setStyleSheet("background-color: #21253A; border-radius: 18px; font-size: 18px;");
@@ -230,65 +230,20 @@ void Sidebar::setupUI() {
     userInfoL->setContentsMargins(0, 0, 0, 0);
     userInfoL->setSpacing(1);
 
-    m_userNameLabel = new QLabel("Mi Cuenta");
+    m_userNameLabel = new QLabel("Cerrar sesión");
     m_userNameLabel->setStyleSheet("color: #F1F5F9; font-size: 13px; font-weight: 600; background: transparent;");
-    m_userEmailLabel = new QLabel("usuario@email.com");
-    m_userEmailLabel->setStyleSheet("color: #64748B; font-size: 11px; background: transparent;");
 
     userInfoL->addWidget(m_userNameLabel);
-    userInfoL->addWidget(m_userEmailLabel);
     profileL->addWidget(avatar);
     profileL->addWidget(userInfoW, 1);
 
-    QLabel *arrowL = new QLabel("⋮");
-    arrowL->setStyleSheet("color: #475569; font-size: 16px; background: transparent;");
-    profileL->addWidget(arrowL);
-
     profileInner->setGeometry(0, 0, m_profileBtn->width(), m_profileBtn->height());
-    connect(m_profileBtn, &QPushButton::clicked, this, &Sidebar::onProfileClicked);
+    connect(m_profileBtn, &QPushButton::clicked, this, &Sidebar::logoutRequested);
 
     m_layout->addWidget(m_profileBtn);
     m_layout->addSpacing(10);
 
     setActivePage(0);
-}
-
-void Sidebar::onProfileClicked() {
-    // Eventos de mouse:
-    // No se sobrescribe mousePressEvent porque QPushButton ya traduce el click
-    // del mouse en la senal clicked(). Este slot responde a esa senal.
-    QMenu *menu = new QMenu(this);
-    menu->setStyleSheet(R"(
-        QMenu {
-            background-color: #1A1D27;
-            border: 1px solid #2E3347;
-            border-radius: 10px;
-            padding: 6px;
-        }
-        QMenu::item {
-            color: #E2E8F0;
-            font-size: 13px;
-            padding: 10px 16px;
-            border-radius: 6px;
-        }
-        QMenu::item:selected {
-            background-color: #21253A;
-            color: #F1F5F9;
-        }
-        QMenu::separator {
-            height: 1px;
-            background-color: #2E3347;
-            margin: 4px 8px;
-        }
-    )");
-
-    // Solo la acción de cerrar sesión
-    QAction *logoutAction = new QAction("🚪   Cerrar sesión", this);
-    connect(logoutAction, &QAction::triggered, this, &Sidebar::logoutRequested);
-    menu->addAction(logoutAction);
-
-    QPoint pos = m_profileBtn->mapToGlobal(QPoint(0, -menu->sizeHint().height() - 4));
-    menu->exec(pos);
 }
 
 void Sidebar::setActivePage(int index) {
@@ -300,8 +255,8 @@ void Sidebar::setActivePage(int index) {
 }
 
 void Sidebar::setUserInfo(const QString &name, const QString &email) {
-    if (m_userNameLabel)  m_userNameLabel->setText(name);
-    if (m_userEmailLabel) m_userEmailLabel->setText(email);
+    Q_UNUSED(name);
+    Q_UNUSED(email);
 }
 
 void Sidebar::setSyncStatus(bool online, int pending) {

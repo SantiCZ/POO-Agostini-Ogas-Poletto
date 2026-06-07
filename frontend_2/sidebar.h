@@ -64,9 +64,6 @@ public slots:
     void setActivePage(int index);
     void setSyncStatus(bool online, int pending = 0);
 
-private slots:
-    void onProfileClicked();
-
 private:
     void setupUI();
 

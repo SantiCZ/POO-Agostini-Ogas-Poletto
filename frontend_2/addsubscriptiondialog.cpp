@@ -4,13 +4,19 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
+#include "addsubscriptiondialog.h"
+#include "models.h"
+#include "datamanager.h"
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QGridLayout>
 #include <QLabel>
 #include <QMessageBox>
 
 AddSubscriptionDialog::AddSubscriptionDialog(QWidget *parent) : QDialog(parent) {
     setWindowTitle("Nueva Suscripción");
     setModal(true);
-    setFixedSize(480, 500);
+    setFixedSize(480, 460);
     setStyleSheet("QDialog { background-color: #0F1117; border: 1px solid #2E3347; border-radius: 16px; }");
     setupUI();
 }
@@ -89,17 +95,10 @@ void AddSubscriptionDialog::setupUI() {
     m_diasSpin->setSuffix(" días antes");
     m_diasSpin->setStyleSheet(inputStyle);
 
-    m_catCombo = new QComboBox();
-    for (auto &c : CATEGORIAS) m_catCombo->addItem(c);
-    m_catCombo->setCurrentText("Entretenimiento");
-    m_catCombo->setStyleSheet(inputStyle);
-
     formL->addWidget(makeLabel("Nombre del Servicio"),    0, 0, 1, 2);
     formL->addWidget(m_nombreEdit,                        1, 0, 1, 2);
-    formL->addWidget(makeLabel("Monto Mensual"),           2, 0);
-    formL->addWidget(makeLabel("Categoría"),               2, 1);
-    formL->addWidget(m_montoSpin,                         3, 0);
-    formL->addWidget(m_catCombo,                          3, 1);
+    formL->addWidget(makeLabel("Monto Mensual"),           2, 0, 1, 2);
+    formL->addWidget(m_montoSpin,                         3, 0, 1, 2);
     formL->addWidget(makeLabel("Próx. Vencimiento"),       4, 0);
     formL->addWidget(makeLabel("Avisar con"),              4, 1);
     formL->addWidget(m_fechaEdit,                         5, 0);
@@ -169,7 +168,6 @@ void AddSubscriptionDialog::accept()
     s.id             = 0;
     s.nombreServicio = m_nombreEdit->text().trimmed();
     s.monto          = m_montoSpin->value();
-    s.categoria      = m_catCombo->currentText();
     s.fechaVencimiento = m_fechaEdit->date();
     s.diasAviso      = m_diasSpin->value();
     s.activa         = true;
@@ -195,5 +193,4 @@ QString AddSubscriptionDialog::nombreServicio()  const { return m_nombreEdit->te
 double  AddSubscriptionDialog::monto()           const { return m_montoSpin->value(); }
 QDate   AddSubscriptionDialog::fechaVencimiento() const { return m_fechaEdit->date(); }
 int     AddSubscriptionDialog::diasAviso()        const { return m_diasSpin->value(); }
-QString AddSubscriptionDialog::categoria()        const { return m_catCombo->currentText(); }
 QString AddSubscriptionDialog::iconoNombre()      const { return m_nombreEdit->text().toLower().simplified(); }

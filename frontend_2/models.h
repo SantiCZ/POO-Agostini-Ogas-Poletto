@@ -24,7 +24,6 @@ struct MovimientoBase {
     int     id = -1;
     double  monto = 0;
     QDate   fecha;
-    QString categoria;
     QString descripcion;
 };
 
@@ -51,6 +50,9 @@ struct Ticket : public MovimientoBase
 {
     // Comercio o local asociado al comprobante.
     QString nombreLocal;
+
+    // Categoria del ticket.
+    QString categoria;
 
     // Detalle opcional de productos asociados al ticket.
     QList<ItemTicket> items;

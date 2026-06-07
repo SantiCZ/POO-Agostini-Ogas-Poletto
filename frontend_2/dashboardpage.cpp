@@ -103,7 +103,6 @@ RecentExpenseRow::RecentExpenseRow(const QString &icon,
 
     QLabel *nameL = new QLabel(nombre);
     nameL->setStyleSheet("color: #E2E8F0; font-size: 13px; font-weight: 600; background: transparent;");
-
     QLabel *catL = new QLabel(QString("%1  ·  %2").arg(categoria, fecha));
     catL->setStyleSheet("color: #475569; font-size: 11px; background: transparent;");
 
@@ -162,7 +161,7 @@ public:
         nameL->setStyleSheet("color: #E2E8F0; font-size: 13px; font-weight: 600; background: transparent;");
 
         QString fechaStr = sub.fechaVencimiento.toString("dd/MM/yyyy");
-        QLabel *catL = new QLabel(QString("%1  ·  Vence: %2").arg(sub.categoria, fechaStr));
+        QLabel *catL = new QLabel(QString("Vence: %1").arg(fechaStr));
         catL->setStyleSheet("color: #475569; font-size: 11px; background: transparent;");
 
         infoL->addWidget(nameL);

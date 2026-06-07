@@ -13,17 +13,18 @@ TicketCard::TicketCard(
     ) : QFrame(parent)
 {
     setFixedHeight(88);
+    setObjectName("ticketCard");
 
     setCursor(Qt::PointingHandCursor);
 
     setStyleSheet(R"(
-        QFrame {
+        #ticketCard {
             background-color: #1A1D27;
             border: 1px solid #2E3347;
             border-radius: 12px;
         }
 
-        QFrame:hover {
+        #ticketCard:hover {
             border: 1px solid #4ADE80;
             background-color: #1E2235;
         }
@@ -78,10 +79,19 @@ TicketCard::TicketCard(
     QLabel *catL =
         new QLabel(ticket.categoria);
 
-    catL->setStyleSheet(
-        "color: #818CF8;"
-        "font-size: 11px;"
-        );
+    if (ticket.categoria.isEmpty()) {
+        catL->hide();
+    } else {
+        catL->setStyleSheet(
+            "color: #818CF8;"
+            "background-color: rgba(129, 140, 248, 0.12);"
+            "border: 1px solid rgba(129, 140, 248, 0.2);"
+            "border-radius: 6px;"
+            "padding: 2px 6px;"
+            "font-size: 11px;"
+            "font-weight: 600;"
+            );
+    }
 
     QLabel *fechaL =
         new QLabel(
@@ -126,7 +136,7 @@ TicketCard::TicketCard(
         new QVBoxLayout();
 
     infoL->addWidget(nameL);
-    infoL->addWidget(catL);
+    infoL->addWidget(catL, 0, Qt::AlignLeft);
     infoL->addWidget(fechaL);
 
     QVBoxLayout *rightL =

@@ -86,6 +86,8 @@ SubCard::SubCard(const Suscripcion &sub, QWidget *parent)
     QString diasTxt, diasStyle;
     if (diasRestantes < 0) {
         diasTxt = "¡Vencida!"; diasStyle = "color: #F87171;";
+
+
     } else if (diasRestantes == 0) {
         diasTxt = "Vence HOY"; diasStyle = "color: #F87171;";
     } else if (diasRestantes <= 7) {
@@ -99,12 +101,8 @@ SubCard::SubCard(const Suscripcion &sub, QWidget *parent)
     QLabel *diasL = new QLabel(diasTxt);
     diasL->setStyleSheet(diasStyle + "font-size: 12px; background: transparent; font-weight: 500;");
 
-    QLabel *catL = new QLabel(sub.categoria);
-    catL->setStyleSheet("color: #475569; font-size: 11px; background: transparent;");
-
     infoL->addWidget(nameRow);
     infoL->addWidget(diasL);
-    infoL->addWidget(catL);
 
     // Panel derecho
     QWidget *rightW = new QWidget();
@@ -324,7 +322,7 @@ void SubscriptionsPage::onEditClicked(int id)
     QDialog dlg(this);
     dlg.setWindowTitle("Editar Suscripción");
     dlg.setModal(true);
-    dlg.setFixedSize(480, 460);
+    dlg.setFixedSize(480, 420);
     dlg.setStyleSheet(R"(
         QDialog { background-color: #0F1117; border: 1px solid #2E3347; border-radius: 16px; }
         QLabel  { background: transparent; }
@@ -399,17 +397,10 @@ void SubscriptionsPage::onEditClicked(int id)
     diasSpin->setSuffix(" días antes");
     diasSpin->setStyleSheet(inputStyle);
 
-    auto *catCombo = new QComboBox();
-    for (auto &c : CATEGORIAS) catCombo->addItem(c);
-    catCombo->setCurrentText(actual.categoria);
-    catCombo->setStyleSheet(inputStyle);
-
     formL->addWidget(makeLabel("Nombre del Servicio"), 0, 0, 1, 2);
     formL->addWidget(nombreEdit,                       1, 0, 1, 2);
-    formL->addWidget(makeLabel("Monto Mensual"),        2, 0);
-    formL->addWidget(makeLabel("Categoría"),            2, 1);
-    formL->addWidget(montoSpin,                        3, 0);
-    formL->addWidget(catCombo,                         3, 1);
+    formL->addWidget(makeLabel("Monto Mensual"),        2, 0, 1, 2);
+    formL->addWidget(montoSpin,                        3, 0, 1, 2);
     formL->addWidget(makeLabel("Próx. Vencimiento"),    4, 0);
     formL->addWidget(makeLabel("Avisar con"),           4, 1);
     formL->addWidget(fechaEdit,                        5, 0);
@@ -461,7 +452,6 @@ void SubscriptionsPage::onEditClicked(int id)
     editada.monto           = montoSpin->value();
     editada.fechaVencimiento = fechaEdit->date();
     editada.diasAviso       = diasSpin->value();
-    editada.categoria       = catCombo->currentText();
     editada.iconoNombre     = editada.nombreServicio.toLower().simplified();
 
     if (!DataManager::instance().updateSuscripcion(editada)) {

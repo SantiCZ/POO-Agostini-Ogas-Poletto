@@ -145,7 +145,6 @@ void DataManager::sincronizarSuscripcionesLocales()
     QSqlQuery query(m_db.getDB());
     query.prepare(R"(
         SELECT id_suscripcion_remota,
-               id_categoria_remota,
                nombre,
                monto,
                moneda,
@@ -170,7 +169,6 @@ void DataManager::sincronizarSuscripcionesLocales()
     while (query.next()) {
         QJsonObject subJson;
         subJson["id_suscripcion_remota"] = query.value("id_suscripcion_remota").toInt();
-        subJson["id_categoria_remota"] = query.value("id_categoria_remota").toInt();
         subJson["nombre"] = query.value("nombre").toString();
         subJson["monto"] = query.value("monto").toDouble();
         subJson["moneda"] = query.value("moneda").toString();
@@ -514,7 +512,6 @@ void DataManager::guardarSuscripcionRed(const Suscripcion& s)
 
     QJsonObject json;
     json["id_usuario"]   = usuarioId;
-    json["id_categoria"] = 1;
     json["nombre"]       = s.nombreServicio;
     json["monto"]        = s.monto;
     json["moneda"]       = "ARS";
@@ -564,6 +561,9 @@ QVector<Ticket> DataManager::getTickets(const QString& categoriaFiltro, const QS
         t.monto       = query.value("monto").toDouble();
         t.fecha       = QDate::fromString(query.value("fecha_gasto").toString(), Qt::ISODate);
         t.categoria   = query.value("categoria").toString();
+        if (t.categoria.isEmpty()) {
+            t.categoria = query.value("notas").toString();
+        }
         t.procesadoPorIA = false;
         t.imagenPath  = "";
 
@@ -673,19 +673,16 @@ QVector<Suscripcion> DataManager::getSuscripciones()
     QSqlQuery query(m_db.getDB());
     query.prepare(R"(
         SELECT
-            s.id_suscripcion_local AS id_suscripcion,
-            s.nombre,
-            s.monto,
-            s.vencimiento,
-            s.alerta,
-            s.actividad,
-            s.id_categoria_remota,
-            c.nombre AS categoria
-        FROM suscripciones s
-        LEFT JOIN categorias c ON s.id_categoria_remota = c.id_categoria
-        WHERE s.id_usuario_remoto = :uid
-        AND s.actividad = 1
-        ORDER BY s.vencimiento ASC
+            id_suscripcion_local AS id_suscripcion,
+            nombre,
+            monto,
+            vencimiento,
+            alerta,
+            actividad
+        FROM suscripciones
+        WHERE id_usuario_remoto = :uid
+        AND actividad = 1
+        ORDER BY vencimiento ASC
     )");
     query.bindValue(":uid", usuarioId);
     if (!query.exec()) {
@@ -702,7 +699,6 @@ QVector<Suscripcion> DataManager::getSuscripciones()
         s.diasAviso = query.value("alerta").toInt();
         s.activa = query.value("actividad").toBool();
         s.iconoNombre = query.value("nombre").toString().toLower();
-        s.categoria = query.value("categoria").toString();
         subs.append(s);
     }
     return subs;
