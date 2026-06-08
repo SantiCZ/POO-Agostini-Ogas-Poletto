@@ -107,7 +107,7 @@ El backend, ubicado en la carpeta [backend_AlcanIA](./backend_AlcanIA), actúa c
   - `POST /api/v1/suscripciones/sync`: Sincroniza en lote todas las modificaciones, creaciones o eliminaciones lógicas de suscripciones realizadas por el usuario en modo offline.
 
 > [!WARNING]
-> **Seguridad y Hashing:** El backend recibe e interactúa con claves previamente encriptadas del lado del cliente. Sin embargo, en el módulo [security.py](./backend_AlcanIA/security.py) se encuentra implementada toda la lógica para hachear contraseñas mediante `bcrypt` y generar tokens `JWT` para futuras integraciones de autenticación por Token de portador (Bearer).
+> **Seguridad y Hashing:** El backend recibe e interactúa con claves previamente encriptadas del lado del cliente. Sin embargo, en el módulo [security.py](./backend_AlcanIA/security.py) se encuentra implementada toda la lógica para hashear contraseñas mediante `bcrypt` y generar tokens `JWT` para futuras integraciones de autenticación por Token de portador (Bearer).
 
 ---
 
@@ -176,5 +176,5 @@ La carpeta principal del proyecto se divide en dos componentes independientes:
 * **Universidad:** Universidad Blas Pascal (UBP)
 * **Autores:** 
   - Agostini Santiago
-  - Ogass Avril
+  - Ogas Avril
   - Poletto Lorenzo
