@@ -12,29 +12,29 @@ El sistema opera bajo un modelo cliente-servidor con soporte de sincronización 
 
 ```mermaid
 graph TD
-    subgraph Cliente_Escritorio [Cliente de Escritorio (Local)]
-        QtApp[Aplicación Qt 6 C++]
-        DBLocal[(SQLite tasty_alcancia.db)]
-        QtApp <-->|Lectura/Escritura Local| DBLocal
+    subgraph Cliente_Escritorio ["Cliente de Escritorio (Local)"]
+        QtApp["Aplicación Qt 6 C++"]
+        DBLocal[("SQLite (tasty_alcancia.db)")]
+        QtApp <-->|"Lectura/Escritura Local"| DBLocal
     end
 
-    subgraph Servidor_VPS [Servidor VPS en la Nube (Ubuntu 24.04)]
-        FastAPI[FastAPI Backend - Python 3.11]
-        DBMySQL[(Base de Datos - MySQL 8.0)]
-        PMA[Administración - phpMyAdmin]
-        Storage[Almacenamiento Físico - uploads/tickets/]
+    subgraph Servidor_VPS ["Servidor VPS en la Nube (Ubuntu 24.04)"]
+        FastAPI["FastAPI Backend - Python 3.11"]
+        DBMySQL[("Base de Datos (MySQL 8.0)")]
+        PMA["Administración (phpMyAdmin)"]
+        Storage["Almacenamiento Físico (uploads/tickets/)"]
         
-        FastAPI <-->|Consultas SQL| DBMySQL
-        PMA -.->|Administración| DBMySQL
-        FastAPI --->|Guarda Comprobantes| Storage
+        FastAPI <-->|"Consultas SQL"| DBMySQL
+        PMA -.->|"Administración"| DBMySQL
+        FastAPI --->|"Guarda Comprobantes"| Storage
     end
 
-    subgraph Servicios_Externos [Inteligencia Artificial]
-        OpenAI[API de OpenAI - GPT-4o-mini]
+    subgraph Servicios_Externos ["Inteligencia Artificial"]
+        OpenAI["API de OpenAI (GPT-4o-mini)"]
     end
 
-    QtApp <-->|Consultas y Sincronización REST| FastAPI
-    FastAPI <-->|Análisis de Imágenes/PDFs| OpenAI
+    QtApp <-->|"Consultas y Sincronización REST"| FastAPI
+    FastAPI <-->|"Análisis de Imágenes/PDFs"| OpenAI
 ```
 
 > [!NOTE]
