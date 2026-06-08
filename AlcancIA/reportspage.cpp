@@ -285,9 +285,14 @@ void ReportsPage::refreshData() {
 
     // Bar chart
     QMap<int, double> semanasMap;
+    semanasMap[1] = 0.0;
+    semanasMap[2] = 0.0;
+    semanasMap[3] = 0.0;
+    semanasMap[4] = 0.0;
     for (const Ticket &t : tickets) {
         if (t.fecha.year() == year && t.fecha.month() == month) {
             int semana = ((t.fecha.day() - 1) / 7) + 1;
+            if (semana > 4) semana = 4;
             semanasMap[semana] += t.monto;
         }
     }
