@@ -93,6 +93,10 @@ compile_commands.json
 
 # Archivos de log (pueden generar basura)
 *.log
+# Variables de entorno y claves secretas
+.env
+.env.*
+!*.env.example
 
 # Backups de Qt Creator (por si crea copias)
 *.autosave

@@ -1,0 +1,36 @@
+# =====================================================================
+# DEPENDENCIAS DE PYTHON - ALCANCIA BACKEND
+# =====================================================================
+
+# Framework principal para la creación de la API REST
+fastapi
+
+# Servidor ASGI de alto rendimiento para ejecutar FastAPI
+uvicorn[standard]
+
+# Encriptación y hashing seguro de contraseñas (usado por bcrypt en security.py)
+passlib[bcrypt]
+
+# Generación y validación de tokens de sesión JWT
+python-jose[cryptography]
+
+# Soporte para procesar envíos de archivos y formularios multipart (subida de tickets)
+python-multipart
+
+# Conector de Python para comunicarse con la base de datos MySQL
+pymysql
+
+# Librería criptográfica requerida por jose y passlib para algoritmos de seguridad
+cryptography
+
+# Carga de variables de configuración del archivo .env al entorno de ejecución
+python-dotenv
+
+# Cliente oficial para conectarse con la API de OpenAI (GPT)
+openai
+
+# Procesamiento de imágenes (usada internamente para manejo de archivos/formatos)
+Pillow
+
+# PyMuPDF: Necesario para extraer y renderizar la primera página de archivos PDF
+PyMuPDF

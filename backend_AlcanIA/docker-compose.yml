@@ -1,0 +1,82 @@
+# =====================================================================
+# ORQUESTACIÓN DE CONTENEDORES - DOCKER COMPOSE
+# =====================================================================
+# Este archivo define y gestiona los distintos servicios/contenedores
+# que componen nuestro entorno del VPS.
+# =====================================================================
+
+services:
+  # ---------------------------------------------------------------------
+  # 1. BASE DE DATOS DE PRODUCCIÓN (MySQL)
+  # ---------------------------------------------------------------------
+  db:
+    image: mysql:8.0               # Imagen oficial de MySQL versión 8.0
+    container_name: alcancIA_mysql
+    restart: always                # Si el contenedor se cae o reinicia el VPS, se vuelve a levantar
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD} # Contraseña del superusuario root (desde .env)
+      MYSQL_DATABASE: tasty_alcancIA              # Creación por defecto de la base de datos de AlcancIA
+      MYSQL_USER: lolo                            # Usuario normal por defecto
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}           # Contraseña del usuario normal (desde .env)
+    ports:
+      - "3306:3306"                # Mapeo de puerto interno 3306 al puerto 3306 del VPS
+    volumes:
+      - db_data:/var/lib/mysql     # Persistencia de datos física en un volumen para no perder info al apagar el contenedor
+
+  # ---------------------------------------------------------------------
+  # 2. INTERFAZ GRÁFICA DE BASE DE DATOS (phpMyAdmin)
+  # ---------------------------------------------------------------------
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin   # Panel de control web para administrar MySQL de forma fácil
+    container_name: alcancIA_phpmyadmin
+    restart: always
+    environment:
+      PMA_HOST: db                 # Le indica a phpMyAdmin que el motor MySQL se llama "db"
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD} # Requiere login del superusuario root
+    ports:
+      - "8080:80"                  # Acceso web a través del puerto 8080 del VPS (ej: http://vps_ip:8080)
+    depends_on:
+      - db                         # Espera a que el contenedor de MySQL esté activo para levantarse
+
+  # ---------------------------------------------------------------------
+  # 3. BACKEND DE NUESTRA APLICACIÓN (FastAPI - AlcancIA)
+  # ---------------------------------------------------------------------
+  api_alcancia:
+    build: .                       # Compila la imagen usando el Dockerfile de esta misma carpeta
+    container_name: alcancIA_fastapi_v2
+    restart: always
+    ports:
+      - "8000:80"                  # Mapeo de la API al puerto 8000 del VPS
+    volumes:
+      - .:/app                     # Mapea nuestra carpeta local al contenedor (permite recarga en vivo durante el desarrollo)
+    depends_on:
+      - db                         # No arranca hasta que la base de datos esté lista
+    # Le pasamos el archivo de configuración .env para que la API lea las credenciales
+    env_file:
+      - .env
+
+  # ---------------------------------------------------------------------
+  # 4. PROYECTO EXTERNO / COMPARTIDO (API Kanban)
+  # ---------------------------------------------------------------------
+  # NOTA DE ATENCIÓN: Este servicio pertenece a otra práctica ("ejercicio04_backend")
+  # compartiendo el mismo contenedor de MySQL. Si solo deseas usar AlcancIA 
+  # en este Docker Compose, este servicio podría considerarse redundante o de más.
+  # ---------------------------------------------------------------------
+  api_kanban:
+    build: ../ejercicio04_backend
+    container_name: kanban_fastapi
+    restart: always
+    ports:
+      - "8001:80"                  # Mapeo al puerto 8001 del VPS
+    volumes:
+      - ../ejercicio04_backend:/app
+    depends_on:
+      - db
+    env_file:
+      - .env
+
+# ---------------------------------------------------------------------
+# VOLÚMENES PERSISTENTES
+# ---------------------------------------------------------------------
+volumes:
+  db_data:                         # Definición del volumen persistente para guardar la data de la DB
