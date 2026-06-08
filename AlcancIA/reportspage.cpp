@@ -97,7 +97,7 @@ void BarChart::paintEvent(QPaintEvent *) {
 
     for (int i = 0; i < m_data.size(); ++i) {
         double ratio = (m_maxVal > 0) ? (m_data[i].second / m_maxVal) : 0;
-        int bh = (int)((h - 40) * ratio);
+        int bh = (int)((h - 60) * ratio);
         int x  = pad + i * ((w - pad * 2) / m_data.size()) + 4;
         int y  = h - 30 - bh;
 
@@ -113,7 +113,7 @@ void BarChart::paintEvent(QPaintEvent *) {
 
         p.setPen(QColor(colors[i % colors.size()]));
         p.setFont(QFont("Segoe UI", 9, QFont::Bold));
-        p.drawText(x, y - 4, barW, 16, Qt::AlignCenter,
+        p.drawText(x, y - 20, barW, 18, Qt::AlignCenter,
                    QString("$%1k").arg((int)(m_data[i].second / 1000)));
 
         p.setPen(QColor("#64748B"));
